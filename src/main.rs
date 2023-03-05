@@ -1,10 +1,8 @@
 use bevy::prelude::*;
 
 use bevy::{
-    audio::AudioPlugin,
     core_pipeline::CorePipelinePlugin,
     diagnostic::DiagnosticsPlugin,
-    gltf::GltfPlugin,
     input::InputPlugin,
     log::LogPlugin,
     pbr::PbrPlugin,
@@ -27,7 +25,6 @@ fn main() {
         .add_plugin(CorePlugin::default())
         .add_plugin(TimePlugin::default())
         .add_plugin(TransformPlugin::default())
-        .add_plugin(HierarchyPlugin::default())
         .add_plugin(DiagnosticsPlugin::default())
         .add_plugin(InputPlugin::default())
         .add_plugin(WindowPlugin {
@@ -48,11 +45,7 @@ fn main() {
         .add_plugin(PbrPlugin::default())
         .add_plugin(UiPlugin::default())
         .add_plugin(TextPlugin::default())
-        .add_plugin(AudioPlugin::default())
-        .add_plugin(GilrsPlugin::default())
-        .add_plugin(GltfPlugin::default())
         .add_plugin(WinitPlugin::default())
-        .add_plugin(AnimationPlugin::default())
         .add_startup_system(setup)
         .run();
 }
