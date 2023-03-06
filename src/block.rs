@@ -5,8 +5,8 @@ use bevy::prelude::*;
 use bevy::{input::mouse::MouseMotion, render::mesh::VertexAttributeValues, ui::FocusPolicy};
 use bevy_mod_picking::{Hover, PickableMesh, PickingEvent};
 
-#[derive(Component)]
-struct Block {
+#[derive(Component, Clone, Default)]
+pub struct Block {
     pub mesh: Handle<Mesh>,
     pub adjacent: usize,
 }
@@ -64,6 +64,25 @@ impl Plugin for BlockPlugin {
     }
 }
 
+#[derive(Bundle, Default)]
+pub struct BlockBundle {
+    pub block: Block,
+
+    pub mesh: Handle<Mesh>,
+    pub material: Handle<StandardMaterial>,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
+    /// User indication of whether an entity is visible
+    pub visibility: Visibility,
+    /// Algorithmically-computed indication of whether an entity is visible and should be extracted for rendering
+    pub computed_visibility: ComputedVisibility,
+
+    pub pickable_mesh: PickableMesh,
+    pub interaction: Interaction,
+    pub focus_policy: FocusPolicy,
+    pub hover: Hover,
+}
+
 fn spawn(
     mut commands: Commands,
     meshes: ResMut<Assets<Mesh>>,
@@ -83,21 +102,14 @@ fn spawn(
 
     let block = Block::new(meshes);
 
-    commands.spawn((
-        PbrBundle {
-            mesh: block.mesh.clone(),
-            material,
-            transform,
-            ..default()
-        },
+    commands.spawn(BlockBundle {
+        // TODO: maybe remove this mesh duplication
+        mesh: block.mesh.clone(),
         block,
-        (
-            PickableMesh::default(),
-            Interaction::default(),
-            FocusPolicy::default(),
-            Hover::default(),
-        ),
-    ));
+        material,
+        transform,
+        ..default()
+    });
 }
 
 fn rotate_with_mouse(
