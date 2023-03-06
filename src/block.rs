@@ -6,7 +6,54 @@ use bevy::{input::mouse::MouseMotion, render::mesh::VertexAttributeValues, ui::F
 use bevy_mod_picking::{Hover, PickableMesh, PickingEvent};
 
 #[derive(Component)]
-struct Block;
+struct Block {
+    pub mesh: Handle<Mesh>,
+    pub adjacent: usize,
+}
+
+impl Block {
+    pub fn new(mut meshes: ResMut<Assets<Mesh>>) -> Self {
+        let mut cube: Mesh = shape::Cube::default().into();
+        Self::update_face_mesh(&mut cube, 0);
+        Self {
+            mesh: meshes.add(cube),
+            adjacent: 0,
+        }
+    }
+    pub fn update_adjacent(&mut self, meshes: &mut ResMut<Assets<Mesh>>, adjacent: usize) {
+        if let Some(cube) = meshes.get_mut(&self.mesh) {
+            Self::update_face_mesh(cube, adjacent);
+        }
+        self.adjacent = adjacent;
+    }
+    fn update_face_mesh(cube: &mut Mesh, index: usize) {
+        let mut uv_coordinates = Vec::new();
+        for _ in 0..6 {
+            uv_coordinates.extend(Self::calculate_face_uv(index))
+        }
+        let uvs = VertexAttributeValues::Float32x2(uv_coordinates);
+        if let Some((_id, values)) = cube.attributes_mut().nth(2) {
+            *values = uvs;
+        }
+    }
+    fn calculate_face_uv(sprite_index: usize) -> [[f32; 2]; 4] {
+        let cols = 8;
+        let rows = 8;
+        let sprite_width = 16.0;
+        let sprite_height = 16.0;
+        let texture_width = sprite_width * cols as f32;
+        let texture_height = sprite_height * rows as f32;
+        let col_index = sprite_index % cols;
+        let row_index = sprite_index / rows;
+        let fractional_width = sprite_width / texture_width;
+        let fractional_height = sprite_height / texture_height;
+        let left = fractional_width * col_index as f32;
+        let top = fractional_width * row_index as f32;
+        let right = left + fractional_width;
+        let bottom = top + fractional_height;
+        [[left, top], [right, top], [right, bottom], [left, bottom]]
+    }
+}
 
 pub struct BlockPlugin;
 impl Plugin for BlockPlugin {
@@ -17,27 +64,9 @@ impl Plugin for BlockPlugin {
     }
 }
 
-fn calculate_face_uv(sprite_index: usize) -> [[f32; 2]; 4] {
-    let cols = 8;
-    let rows = 8;
-    let sprite_width = 16.0;
-    let sprite_height = 16.0;
-    let texture_width = sprite_width * cols as f32;
-    let texture_height = sprite_height * rows as f32;
-    let col_index = sprite_index % cols;
-    let row_index = sprite_index / rows;
-    let fractional_width = sprite_width / texture_width;
-    let fractional_height = sprite_height / texture_height;
-    let left = fractional_width * col_index as f32;
-    let top = fractional_width * row_index as f32;
-    let right = left + fractional_width;
-    let bottom = top + fractional_height;
-    [[left, top], [right, top], [right, bottom], [left, bottom]]
-}
-
 fn spawn(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
+    meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
@@ -48,29 +77,20 @@ fn spawn(
         ..default()
     });
 
-    let mut cube: Mesh = shape::Cube::default().into();
-    let mut uv_coordinates = Vec::new();
-    for _ in 0..6 {
-        uv_coordinates.extend(calculate_face_uv(0))
-    }
-    let uvs = VertexAttributeValues::Float32x2(uv_coordinates);
-    if let Some((_id, values)) = cube.attributes_mut().nth(2) {
-        *values = uvs;
-    }
-    let mesh_handle = meshes.add(cube);
-
     let mut transform = Transform::default();
     transform.rotate_x(FRAC_PI_4);
     transform.rotate_y(FRAC_PI_4);
 
+    let block = Block::new(meshes);
+
     commands.spawn((
         PbrBundle {
-            mesh: mesh_handle.clone(),
+            mesh: block.mesh.clone(),
             material,
             transform,
             ..default()
         },
-        Block,
+        block,
         (
             PickableMesh::default(),
             Interaction::default(),
@@ -110,12 +130,20 @@ fn get_primary_window_size(windows: &Res<Windows>) -> Vec2 {
     Vec2::new(window.width(), window.height())
 }
 
-fn block_picking_events(mut events: EventReader<PickingEvent>) {
+fn block_picking_events(
+    mut events: EventReader<PickingEvent>,
+    mut query: Query<(Entity, &mut Block)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
     for event in events.iter() {
-        match event {
-            PickingEvent::Selection(e) => info!("A selection event happened: {:?}", e),
-            PickingEvent::Hover(e) => info!("Egads! A hover event!? {:?}", e),
-            PickingEvent::Clicked(e) => info!("Gee Willikers, it's a click! {:?}", e),
+        if let PickingEvent::Clicked(entity) = event {
+            for (e, mut block) in query.iter_mut() {
+                if e == *entity {
+                    let adjacent = block.adjacent + 1;
+                    block.update_adjacent(&mut meshes, adjacent);
+                    break;
+                }
+            }
         }
     }
 }
