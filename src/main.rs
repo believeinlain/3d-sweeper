@@ -5,6 +5,7 @@ use bevy::{
     log::LogPlugin, pbr::PbrPlugin, render::RenderPlugin, scene::ScenePlugin, sprite::SpritePlugin,
     text::TextPlugin, time::TimePlugin, ui::UiPlugin, window::WindowPlugin, winit::WinitPlugin,
 };
+use bevy_mod_picking::DefaultPickingPlugins;
 
 mod block;
 mod camera;
@@ -39,9 +40,10 @@ fn main() {
         .add_plugin(UiPlugin::default())
         .add_plugin(TextPlugin::default())
         .add_plugin(WinitPlugin::default())
-        .add_startup_system(setup)
         .add_plugin(BlockPlugin)
         .add_plugin(MainCameraPlugin)
+        .add_plugins(DefaultPickingPlugins)
+        .add_startup_system(setup)
         .run();
 }
 

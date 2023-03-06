@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use bevy::input::mouse::MouseWheel;
+use bevy_mod_picking::PickingCameraBundle;
 
 #[derive(Component)]
 struct MainCamera {
@@ -25,6 +26,7 @@ fn spawn(mut commands: Commands) {
             ..Default::default()
         },
         MainCamera { zoom },
+        PickingCameraBundle::default(),
     ));
 }
 
