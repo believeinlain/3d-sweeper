@@ -7,9 +7,10 @@ use bevy::{
 };
 
 mod block;
-mod texture;
+mod camera;
 
 use block::BlockPlugin;
+use camera::MainCameraPlugin;
 
 fn main() {
     App::new()
@@ -38,8 +39,9 @@ fn main() {
         .add_plugin(UiPlugin::default())
         .add_plugin(TextPlugin::default())
         .add_plugin(WinitPlugin::default())
-        .add_plugin(BlockPlugin)
         .add_startup_system(setup)
+        .add_plugin(BlockPlugin)
+        .add_plugin(MainCameraPlugin)
         .run();
 }
 
@@ -51,13 +53,7 @@ fn setup(mut commands: Commands) {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(8.0, 16.0, 8.0),
-        ..default()
-    });
-
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(10.0, 10.0, 10.0)
-            .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        transform: Transform::from_xyz(16.0, 8.0, 8.0),
         ..default()
     });
 }
