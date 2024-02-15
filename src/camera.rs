@@ -10,8 +10,8 @@ struct MainCamera {
 pub struct MainCameraPlugin;
 impl Plugin for MainCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(spawn)
-            .add_system(zoom_with_mouse_wheel);
+        app.add_systems(Startup, spawn)
+            .add_systems(Update, zoom_with_mouse_wheel);
     }
 }
 
@@ -33,7 +33,7 @@ fn zoom_with_mouse_wheel(
     mut query: Query<(&mut MainCamera, &mut Transform)>,
 ) {
     let mut scroll = 0.0;
-    for ev in ev_scroll.iter() {
+    for ev in ev_scroll.read() {
         scroll += ev.y;
     }
     if scroll.abs() > 0.0 {
