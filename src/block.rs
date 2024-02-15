@@ -14,7 +14,8 @@ const _UVS_1: [[f32; 2]; 4] = [[0.25, 0.0], [0.5, 0.0], [0.5, 1.0], [0.25, 1.0]]
 pub struct BlockPlugin;
 impl Plugin for BlockPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(spawn).add_system(rotate_with_mouse);
+        app.add_systems(Startup, spawn)
+            .add_systems(Update, rotate_with_mouse);
     }
 }
 
@@ -58,7 +59,7 @@ fn spawn(
 }
 
 fn rotate_with_mouse(
-    windows: Res<Windows>,
+    windows: Query<&Window>,
     mut ev_motion: EventReader<MouseMotion>,
     input_mouse: Res<Input<MouseButton>>,
     mut query: Query<(&Block, &mut Transform)>,
@@ -67,23 +68,20 @@ fn rotate_with_mouse(
 
     if input_mouse.pressed(rotate_binding) {
         let mut rotation_delta = Vec2::ZERO;
-        for ev in ev_motion.iter() {
+        for ev in ev_motion.read() {
             rotation_delta += ev.delta;
         }
         if rotation_delta.length_squared() > 0.0 {
-            let window = get_primary_window_size(&windows);
-            let delta_x = rotation_delta.x / window.x * PI * 2.0;
-            let delta_y = rotation_delta.y / window.y * PI;
+            let window = windows.single();
+            let delta_x = rotation_delta.x / window.width() * PI * 2.0;
+            let delta_y = rotation_delta.y / window.height() * PI;
             for (_block, mut transform) in query.iter_mut() {
                 // TODO: make rotation feel more intuitive
                 transform.rotate_axis(Vec3::Y, delta_x);
                 transform.rotate_axis(Vec3::Z, -delta_y);
             }
         }
+    } else {
+        ev_motion.clear();
     }
-}
-
-fn get_primary_window_size(windows: &Res<Windows>) -> Vec2 {
-    let window = windows.get_primary().unwrap();
-    Vec2::new(window.width(), window.height())
 }
