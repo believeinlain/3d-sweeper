@@ -11,6 +11,7 @@ fn main() {
     App::new()
         .add_plugins(
             DefaultPlugins
+                // Window settings
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         resolution: WindowResolution::new(800.0, 600.0),
@@ -19,14 +20,17 @@ fn main() {
                     }),
                     ..default()
                 })
+                // Log settings
                 .set(LogPlugin {
                     level: bevy::log::Level::INFO,
                     ..default()
-                }),
+                })
+                // Texture settings
+                .set(ImagePlugin::default_nearest()),
         )
         .add_plugins((
             RapierPhysicsPlugin::<NoUserData>::default(),
-            RapierDebugRenderPlugin::default(),
+            // RapierDebugRenderPlugin::default(),
         ))
         .add_systems(Startup, setup)
         .add_plugins((BlockPlugin, MainCameraPlugin))
