@@ -1,4 +1,5 @@
-use bevy::prelude::*;
+use bevy::{log::LogPlugin, prelude::*, window::WindowResolution};
+use bevy_rapier3d::prelude::*;
 
 mod block;
 mod camera;
@@ -8,7 +9,25 @@ use camera::MainCameraPlugin;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        resolution: WindowResolution::new(800.0, 600.0),
+                        title: "3D Sweeper".to_string(),
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(LogPlugin {
+                    level: bevy::log::Level::INFO,
+                    ..default()
+                }),
+        )
+        .add_plugins((
+            RapierPhysicsPlugin::<NoUserData>::default(),
+            RapierDebugRenderPlugin::default(),
+        ))
         .add_systems(Startup, setup)
         .add_plugins((BlockPlugin, MainCameraPlugin))
         .run();
