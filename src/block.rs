@@ -44,24 +44,46 @@ impl Plugin for BlockPlugin {
     }
 }
 
+#[derive(Component)]
+struct BlockMeshes {
+    hidden: Handle<Mesh>,
+    revealed: Handle<Mesh>,
+}
+
+#[derive(Component)]
+struct BlockMaterials {
+    hidden: Handle<StandardMaterial>,
+    marked: Handle<StandardMaterial>,
+}
+
 fn spawn(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let block_materials = BlockMaterials {
+        hidden: materials.add(StandardMaterial::default()),
+        marked: materials.add(StandardMaterial {
+            base_color: Color::RED,
+            ..default()
+        }),
+    };
+
+    let cube = Cuboid::new(1.0, 1.0, 1.0);
+
+    let block_meshes = BlockMeshes {
+        hidden: meshes.add(cube),
+        revealed: meshes.add(Sphere::new(0.25)),
+    };
+
     let mut add_cube = |index, pos| {
-        let material = materials.add(StandardMaterial::default());
-
         let transform = Transform::from_translation(pos);
-        let cube = Cuboid::new(1.0, 1.0, 1.0);
         let bb = cube.aabb_3d(transform.translation, transform.rotation);
-        let mesh = meshes.add(cube);
-
         commands
             .spawn((
                 PbrBundle {
-                    mesh,
-                    material,
+                    mesh: block_meshes.hidden.clone(),
+                    material: block_materials.hidden.clone(),
                     transform,
                     ..default()
                 },
@@ -83,14 +105,24 @@ fn spawn(
             }
         }
     }
+
+    // Keep the different possible meshes and materials for each block on a hidden entity
+    commands.spawn((block_meshes, block_materials, Visibility::Hidden));
 }
 
 #[derive(Event)]
 pub enum BlockEvent {
     /// Uncover a block, detonating any contained mines.
-    Uncover(Entity),
+    Reveal(Entity),
     /// Mark a block (or unmark if already marked) as containing a mine.
     Mark(Entity),
+}
+impl BlockEvent {
+    pub fn block_id(&self) -> Entity {
+        match self {
+            Self::Reveal(e) | Self::Mark(e) => *e,
+        }
+    }
 }
 
 fn click_on_block(
@@ -130,10 +162,10 @@ fn click_on_block(
                 continue;
             };
             let index = block.index;
-            info!("Block {hit:?} {index:?} hit at {dist}");
+            debug!("Block {hit:?} {index:?} hit at {dist}");
             match mouse_event.button {
                 MouseButton::Left => {
-                    block_events.send(BlockEvent::Uncover(*hit));
+                    block_events.send(BlockEvent::Reveal(*hit));
                 }
                 MouseButton::Right => {
                     block_events.send(BlockEvent::Mark(*hit));
@@ -144,37 +176,55 @@ fn click_on_block(
     }
 }
 
-fn handle_block_events(mut block_events: EventReader<BlockEvent>, mut blocks: Query<&mut Block>) {
+fn handle_block_events(
+    mut commands: Commands,
+    mut block_events: EventReader<BlockEvent>,
+    mut blocks: Query<&mut Block>,
+    block_meshes: Query<&BlockMeshes>,
+    block_materials: Query<&BlockMaterials>,
+) {
+    let block_meshes = block_meshes.single();
+    let block_materials = block_materials.single();
     for event in block_events.read() {
+        let id = event.block_id();
+        let mut block = match blocks.get_mut(id) {
+            Ok(block) => block,
+            Err(err) => {
+                error!("Unable to retrieve Block {id:?}: {err}");
+                continue;
+            }
+        };
         match event {
-            BlockEvent::Uncover(entity) => {
-                debug!("Uncover block {entity:?}");
-                let mut block = match blocks.get_mut(*entity) {
-                    Ok(block) => block,
-                    Err(err) => {
-                        error!("Unable to retrieve Block {entity:?}: {err}");
-                        continue;
+            BlockEvent::Reveal(entity) => {
+                debug!("Revealed block {entity:?}");
+                block.revealed = true;
+                commands.entity(*entity).remove::<Handle<Mesh>>();
+                match block.adjacent {
+                    0 => {}
+                    _ => {
+                        commands
+                            .entity(*entity)
+                            .insert(block_meshes.revealed.clone());
                     }
-                };
-                block.adjacent += 1;
+                }
             }
             BlockEvent::Mark(entity) => {
                 debug!("Mark block {entity:?}");
-                let mut block = match blocks.get_mut(*entity) {
-                    Ok(block) => block,
-                    Err(err) => {
-                        error!("Unable to retrieve Block {entity:?}: {err}");
-                        continue;
-                    }
-                };
+                commands.entity(*entity).remove::<Handle<StandardMaterial>>();
                 match block.marked {
                     true => {
                         debug!("Unmark block {entity:?} as mine");
                         block.marked = false;
+                        commands
+                            .entity(*entity)
+                            .insert(block_materials.hidden.clone());
                     }
                     false => {
                         debug!("Mark block {entity:?} as mine");
                         block.marked = true;
+                        commands
+                            .entity(*entity)
+                            .insert(block_materials.marked.clone());
                     }
                 }
             }

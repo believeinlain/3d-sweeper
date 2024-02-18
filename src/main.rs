@@ -36,16 +36,22 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
-            intensity: 9000.0,
-            range: 100.,
+fn setup(
+    mut commands: Commands,
+) {
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            illuminance: 1000.0,
             shadows_enabled: true,
+            color: Color::rgb(1.0, 0.9, 0.85),
             ..default()
         },
-        transform: Transform::from_xyz(16.0, 8.0, 8.0),
+        transform: Transform::from_xyz(-1.0, 1.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
+    });
+    commands.insert_resource(AmbientLight {
+        brightness: 80.0,
+        color: Color::rgb(0.9, 0.9, 1.0),
     });
 }
 
