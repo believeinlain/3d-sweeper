@@ -1,14 +1,12 @@
-use std::f32::consts::{FRAC_PI_4, PI};
-
+use bevy::math::bounding::{Aabb3d, Bounded3d, RayCast3d};
 use bevy::prelude::*;
-use bevy::render::texture::ImageSampler;
 use bevy::window::PrimaryWindow;
-use bevy_rapier3d::prelude::*;
 
-use bevy::input::mouse::{MouseButtonInput, MouseMotion};
-use bevy::render::mesh::VertexAttributeValues;
+use bevy::input::mouse::MouseButtonInput;
 
-#[derive(Component, Default)]
+use crate::camera::MainCamera;
+
+#[derive(Component)]
 struct Block {
     /// Number of mines adjacent to this block.
     adjacent: u8,
@@ -17,37 +15,32 @@ struct Block {
     /// Whether this block has been revealed, and thus should
     /// show its number of adjacent mines.
     revealed: bool,
+    /// Axis-aligned bounding box for this block
+    bb: Aabb3d,
+    /// Grid index of this block
+    index: (u32, u32, u32),
 }
 impl Block {
-    pub fn new() -> Self {
+    pub fn new(bb: Aabb3d, index: (u32, u32, u32)) -> Self {
         Self {
             adjacent: 0,
             marked: false,
-            revealed: true,
+            revealed: false,
+            bb,
+            index,
         }
     }
 }
-
-const UVS_HIDDEN: [[f32; 2]; 4] = [[0.0, 0.0], [0.125, 0.0], [0.125, 0.5], [0.0, 0.5]];
-const UVS_1: [[f32; 2]; 4] = [[0.125, 0.0], [0.25, 0.0], [0.25, 0.5], [0.125, 0.5]];
-const UVS_2: [[f32; 2]; 4] = [[0.25, 0.0], [0.375, 0.0], [0.375, 0.5], [0.25, 0.5]];
-const UVS_3: [[f32; 2]; 4] = [[0.375, 0.0], [0.5, 0.0], [0.5, 0.5], [0.375, 0.5]];
-const UVS_FLAG: [[f32; 2]; 4] = [[0.0, 0.5], [0.125, 0.5], [0.125, 1.0], [0.0, 1.0]];
 
 pub struct BlockPlugin;
 impl Plugin for BlockPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn)
-            .add_systems(
-                Update,
-                (
-                    modify_texture,
-                    rotate_with_mouse,
-                    click_on_block,
-                    handle_block_events,
-                ),
-            )
+            .add_systems(Update, (click_on_block, handle_block_events))
             .add_event::<BlockEvent>();
+
+        #[cfg(feature = "debug-draw")]
+        app.add_systems(Update, block_gizmos);
     }
 }
 
@@ -55,78 +48,40 @@ fn spawn(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
 ) {
-    let texture_handle = asset_server.load("block.png");
+    let mut add_cube = |index, pos| {
+        let material = materials.add(StandardMaterial::default());
 
-    let material = materials.add(StandardMaterial {
-        base_color_texture: Some(texture_handle),
-        ..default()
-    });
+        let transform = Transform::from_translation(pos);
+        let cube = Cuboid::new(1.0, 1.0, 1.0);
+        let bb = cube.aabb_3d(transform.translation, transform.rotation);
+        let mesh = meshes.add(cube);
 
-    let mut cube: Mesh = shape::Cube::default().into();
-    set_cube_uvs(&mut cube, UVS_HIDDEN);
-    let mesh = meshes.add(cube);
+        commands
+            .spawn((
+                PbrBundle {
+                    mesh,
+                    material,
+                    transform,
+                    ..default()
+                },
+                Block::new(bb, index),
+            ))
+            .id()
+    };
 
-    let mut transform = Transform::default();
-    transform.rotate_x(FRAC_PI_4);
-    transform.rotate_y(FRAC_PI_4);
-
-    commands.spawn((
-        PbrBundle {
-            mesh,
-            material,
-            transform: transform.clone(),
-            ..default()
-        },
-        Block::new(),
-        Collider::cuboid(0.5, 0.5, 0.5),
-    ));
-}
-
-/// Modify shading to use nearest neighbor sampling.
-/// Texture sampling settings are in `main.rs`
-fn modify_texture(
-    mut asset_events: EventReader<AssetEvent<Image>>,
-    mut assets: ResMut<Assets<Image>>,
-) {
-    for event in asset_events.read() {
-        match event {
-            AssetEvent::Added { id } => {
-                if let Some(texture) = assets.get_mut(*id) {
-                    texture.sampler = ImageSampler::nearest();
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-fn rotate_with_mouse(
-    windows: Query<&Window>,
-    mut ev_motion: EventReader<MouseMotion>,
-    input_mouse: Res<Input<MouseButton>>,
-    mut query: Query<(&Block, &mut Transform)>,
-) {
-    let rotate_binding = MouseButton::Middle;
-
-    if input_mouse.pressed(rotate_binding) {
-        let mut rotation_delta = Vec2::ZERO;
-        for ev in ev_motion.read() {
-            rotation_delta += ev.delta;
-        }
-        if rotation_delta.length_squared() > 0.0 {
-            let window = windows.single();
-            let delta_x = rotation_delta.x / window.width() * PI * 2.0;
-            let delta_y = rotation_delta.y / window.height() * PI;
-            for (_block, mut transform) in query.iter_mut() {
-                // TODO: make rotation feel more intuitive
-                transform.rotate_axis(Vec3::Y, delta_x);
-                transform.rotate_axis(Vec3::Z, -delta_y);
+    let grid_size: (i32, i32, i32) = (3, 3, 3);
+    for i in 0..grid_size.0 {
+        for j in 0..grid_size.1 {
+            for k in 0..grid_size.2 {
+                let pos = Vec3::new(
+                    (i - grid_size.0 / 2) as f32,
+                    (j - grid_size.1 / 2) as f32,
+                    (k - grid_size.2 / 2) as f32,
+                );
+                add_cube((i as u32, j as u32, k as u32), pos);
             }
         }
-    } else {
-        ev_motion.clear();
     }
 }
 
@@ -140,52 +95,61 @@ pub enum BlockEvent {
 
 fn click_on_block(
     mut mouse_input: EventReader<MouseButtonInput>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    cameras: Query<(&Camera, &GlobalTransform)>,
-    rapier_context: Res<RapierContext>,
+    primary_window: Query<&Window, With<PrimaryWindow>>,
+    main_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    blocks: Query<(Entity, &Block)>,
     mut block_events: EventWriter<BlockEvent>,
 ) {
-    let Some(cursor_pos) = windows.single().cursor_position() else {
+    let Some(cursor_pos) = primary_window.single().cursor_position() else {
         return;
     };
-    let (camera, camera_trans) = cameras.single();
+    let (camera, camera_trans) = main_camera.single();
     for mouse_event in mouse_input.read() {
         if mouse_event.state.is_pressed() {
-            debug!("Left click at {cursor_pos:?}");
+            debug!("Click at {cursor_pos:?}");
             let Some(ray) = super::camera::get_cursor_ray(camera, camera_trans, cursor_pos) else {
                 continue;
             };
             debug!("Cursor ray at {ray:?}");
-            let max_toi = 10.0;
-            let solid = true;
-            let filter = QueryFilter::new();
+            let cast = RayCast3d::from_ray(ray, 100.0);
 
-            let Some((collider, _)) =
-                rapier_context.cast_ray(ray.position, ray.direction, max_toi, solid, filter)
-            else {
+            let mut hits: Vec<_> = blocks
+                .iter()
+                .filter(|(_, block)| !block.revealed)
+                .filter_map(|(entity, block)| {
+                    cast.aabb_intersection_at(&block.bb)
+                        .map(|dist| (dist, entity, block))
+                })
+                .collect();
+            // Consider any unresolved comparisons to be equal (i.e. NaN == NaN)
+            hits.sort_unstable_by(|(a, _, _), (b, _, _)| {
+                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            let Some((dist, hit, block)) = hits.first() else {
                 continue;
             };
-            debug!("Collider entity {collider:?} hit");
+            let index = block.index;
+            info!("Block {hit:?} {index:?} hit at {dist}");
             match mouse_event.button {
-                MouseButton::Left => block_events.send(BlockEvent::Uncover(collider)),
-                MouseButton::Right => block_events.send(BlockEvent::Mark(collider)),
+                MouseButton::Left => {
+                    block_events.send(BlockEvent::Uncover(*hit));
+                }
+                MouseButton::Right => {
+                    block_events.send(BlockEvent::Mark(*hit));
+                }
                 _ => {}
-            }
+            };
         }
     }
 }
 
-fn handle_block_events(
-    mut block_events: EventReader<BlockEvent>,
-    mut blocks: Query<&mut Block, &Handle<Mesh>>,
-    block_meshes: Query<&Handle<Mesh>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-) {
+fn handle_block_events(mut block_events: EventReader<BlockEvent>, mut blocks: Query<&mut Block>) {
     for event in block_events.read() {
         match event {
             BlockEvent::Uncover(entity) => {
                 debug!("Uncover block {entity:?}");
-                let mut block = match blocks.get_component_mut::<Block>(*entity) {
+                let mut block = match blocks.get_mut(*entity) {
                     Ok(block) => block,
                     Err(err) => {
                         error!("Unable to retrieve Block {entity:?}: {err}");
@@ -193,38 +157,15 @@ fn handle_block_events(
                     }
                 };
                 block.adjacent += 1;
-                let block_mesh_handle = match block_meshes.get_component::<Handle<Mesh>>(*entity) {
-                    Ok(handle) => handle,
-                    Err(err) => {
-                        error!("Unable to retrieve Block {entity:?} Mesh handle: {err}");
-                        continue;
-                    }
-                };
-                let Some(block_mesh) = meshes.get_mut(block_mesh_handle) else {
-                    error!("Unable to retrieve Block {entity:?} Mesh");
-                    continue;
-                };
-                update_uvs(&block, block_mesh);
             }
             BlockEvent::Mark(entity) => {
                 debug!("Mark block {entity:?}");
-                let mut block = match blocks.get_component_mut::<Block>(*entity) {
+                let mut block = match blocks.get_mut(*entity) {
                     Ok(block) => block,
                     Err(err) => {
                         error!("Unable to retrieve Block {entity:?}: {err}");
                         continue;
                     }
-                };
-                let block_mesh_handle = match block_meshes.get_component::<Handle<Mesh>>(*entity) {
-                    Ok(handle) => handle,
-                    Err(err) => {
-                        error!("Unable to retrieve Block {entity:?} Mesh handle: {err}");
-                        continue;
-                    }
-                };
-                let Some(block_mesh) = meshes.get_mut(block_mesh_handle) else {
-                    error!("Unable to retrieve Block {entity:?} Mesh");
-                    continue;
                 };
                 match block.marked {
                     true => {
@@ -236,39 +177,14 @@ fn handle_block_events(
                         block.marked = true;
                     }
                 }
-                update_uvs(&block, block_mesh);
             }
         }
     }
 }
 
-fn update_uvs(block: &Block, block_mesh: &mut Mesh) {
-    if block.marked {
-        set_cube_uvs(block_mesh, UVS_FLAG);
-    } else {
-        if block.revealed {
-            set_cube_uvs(
-                block_mesh,
-                match block.adjacent {
-                    1 => UVS_1,
-                    2 => UVS_2,
-                    3 => UVS_3,
-                    _ => UVS_HIDDEN,
-                },
-            )
-        } else {
-            set_cube_uvs(block_mesh, UVS_HIDDEN);
-        }
-    }
-}
-
-fn set_cube_uvs(cube: &mut Mesh, uvs: [[f32; 2]; 4]) {
-    let mut uv_coordinates = Vec::new();
-    for _ in 0..6 {
-        uv_coordinates.extend(uvs)
-    }
-    let uvs = VertexAttributeValues::Float32x2(uv_coordinates);
-    if let Some((_id, values)) = cube.attributes_mut().nth(2) {
-        *values = uvs;
+#[cfg(feature = "debug-draw")]
+fn block_gizmos(mut gizmos: Gizmos, blocks: Query<&Transform, With<Block>>) {
+    for tf in blocks.iter() {
+        gizmos.cuboid(*tf, Color::RED);
     }
 }

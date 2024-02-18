@@ -1,5 +1,7 @@
-use bevy::{log::LogPlugin, prelude::*, window::WindowResolution};
-use bevy_rapier3d::prelude::*;
+use bevy::{
+    app::AppExit, input::keyboard::KeyboardInput, log::LogPlugin, prelude::*,
+    window::WindowResolution,
+};
 
 mod block;
 mod camera;
@@ -28,11 +30,8 @@ fn main() {
                 // Texture settings
                 .set(ImagePlugin::default_nearest()),
         )
-        .add_plugins((
-            RapierPhysicsPlugin::<NoUserData>::default(),
-            // RapierDebugRenderPlugin::default(),
-        ))
         .add_systems(Startup, setup)
+        .add_systems(Update, handle_key_events)
         .add_plugins((BlockPlugin, MainCameraPlugin))
         .run();
 }
@@ -48,4 +47,21 @@ fn setup(mut commands: Commands) {
         transform: Transform::from_xyz(16.0, 8.0, 8.0),
         ..default()
     });
+}
+
+fn handle_key_events(
+    mut key_events: EventReader<KeyboardInput>,
+    mut exit_events: EventWriter<AppExit>,
+) {
+    for event in key_events.read() {
+        match event {
+            KeyboardInput {
+                key_code, state, ..
+            } if matches!(key_code, KeyCode::Escape) && state.is_pressed() => {
+                info!("Pressed ESC key, exiting...");
+                exit_events.send(AppExit);
+            }
+            _ => {}
+        }
+    }
 }
