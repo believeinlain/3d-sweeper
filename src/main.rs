@@ -5,18 +5,38 @@ use bevy::{
 
 mod block;
 mod camera;
+mod minefield;
+mod settings;
 
 use block::BlockPlugin;
 use camera::MainCameraPlugin;
+use minefield::MinefieldPlugin;
+use settings::GameSettingsPlugin;
+
+pub use block::{Block, BlockEvent};
+pub use minefield::{Contains, FieldEvent};
+pub use settings::GameSettings;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
+pub enum GameState {
+    /// Game has started, but no cell has been clicked yet.
+    #[default]
+    Start,
+    /// Game transitions to this state once the first cell is clicked.
+    /// This is when the field actually initializes and determines mine placement.
+    /// At this point the position of all mines is known.
+    Playing,
+}
 
 fn main() {
     App::new()
+        .init_state::<GameState>()
         .add_plugins(
             DefaultPlugins
                 // Window settings
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        resolution: WindowResolution::new(800.0, 600.0),
+                        resolution: WindowResolution::new(1024.0, 768.0),
                         title: "3D Sweeper".to_string(),
                         ..default()
                     }),
@@ -32,13 +52,16 @@ fn main() {
         )
         .add_systems(Startup, setup)
         .add_systems(Update, handle_key_events)
-        .add_plugins((BlockPlugin, MainCameraPlugin))
+        .add_plugins((
+            GameSettingsPlugin,
+            MinefieldPlugin,
+            BlockPlugin,
+            MainCameraPlugin,
+        ))
         .run();
 }
 
-fn setup(
-    mut commands: Commands,
-) {
+fn setup(mut commands: Commands) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 1000.0,

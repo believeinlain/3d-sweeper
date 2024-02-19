@@ -5,37 +5,38 @@ use bevy::window::PrimaryWindow;
 use bevy::input::mouse::MouseButtonInput;
 
 use crate::camera::MainCamera;
+use crate::{Contains, FieldEvent, GameSettings, GameState};
 
 #[derive(Component)]
-struct Block {
-    /// Number of mines adjacent to this block.
-    adjacent: u8,
+pub struct Block {
     /// Whether this block has been marked as a mine.
     marked: bool,
     /// Whether this block has been revealed, and thus should
     /// show its number of adjacent mines.
-    revealed: bool,
+    revealed: Option<Contains>,
     /// Axis-aligned bounding box for this block
     bb: Aabb3d,
-    /// Grid index of this block
-    index: (u32, u32, u32),
+    /// Field index of this block
+    index: [usize; 3],
 }
 impl Block {
-    pub fn new(bb: Aabb3d, index: (u32, u32, u32)) -> Self {
+    pub fn new(bb: Aabb3d, index: [usize; 3]) -> Self {
         Self {
-            adjacent: 0,
             marked: false,
-            revealed: false,
+            revealed: None,
             bb,
             index,
         }
+    }
+    pub fn index(&self) -> [usize; 3] {
+        self.index
     }
 }
 
 pub struct BlockPlugin;
 impl Plugin for BlockPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn)
+        app.add_systems(OnEnter(GameState::Start), spawn)
             .add_systems(Update, (click_on_block, handle_block_events))
             .add_event::<BlockEvent>();
 
@@ -47,16 +48,36 @@ impl Plugin for BlockPlugin {
 #[derive(Component)]
 struct BlockMeshes {
     hidden: Handle<Mesh>,
-    revealed: Handle<Mesh>,
+    revealed_1: Handle<Mesh>,
+    revealed_2: Handle<Mesh>,
+    revealed_3: Handle<Mesh>,
+    revealed_4: Handle<Mesh>,
+    revealed_5: Handle<Mesh>,
+    mine: Handle<Mesh>,
 }
 
 #[derive(Component)]
 struct BlockMaterials {
     hidden: Handle<StandardMaterial>,
     marked: Handle<StandardMaterial>,
+    revealed_1: Handle<StandardMaterial>,
+    revealed_2: Handle<StandardMaterial>,
+    revealed_3: Handle<StandardMaterial>,
+    revealed_4: Handle<StandardMaterial>,
+    revealed_5: Handle<StandardMaterial>,
+    mine: Handle<StandardMaterial>,
+}
+
+fn calculate_position(index: [usize; 3], dim: [usize; 3]) -> Vec3 {
+    Vec3::new(
+        (index[0] as isize - dim[0] as isize / 2) as f32,
+        (index[1] as isize - dim[1] as isize / 2) as f32,
+        (index[2] as isize - dim[2] as isize / 2) as f32,
+    )
 }
 
 fn spawn(
+    settings: Res<GameSettings>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -67,13 +88,42 @@ fn spawn(
             base_color: Color::RED,
             ..default()
         }),
+        revealed_1: materials.add(StandardMaterial {
+            base_color: Color::BLUE,
+            ..default()
+        }),
+        revealed_2: materials.add(StandardMaterial {
+            base_color: Color::GREEN,
+            ..default()
+        }),
+        revealed_3: materials.add(StandardMaterial {
+            base_color: Color::RED,
+            ..default()
+        }),
+        revealed_4: materials.add(StandardMaterial {
+            base_color: Color::ORANGE,
+            ..default()
+        }),
+        revealed_5: materials.add(StandardMaterial {
+            base_color: Color::PURPLE,
+            ..default()
+        }),
+        mine: materials.add(StandardMaterial {
+            base_color: Color::DARK_GRAY,
+            ..default()
+        }),
     };
 
     let cube = Cuboid::new(1.0, 1.0, 1.0);
 
     let block_meshes = BlockMeshes {
         hidden: meshes.add(cube),
-        revealed: meshes.add(Sphere::new(0.25)),
+        revealed_1: meshes.add(Sphere::new(0.1)),
+        revealed_2: meshes.add(Sphere::new(0.15)),
+        revealed_3: meshes.add(Sphere::new(0.2)),
+        revealed_4: meshes.add(Sphere::new(0.25)),
+        revealed_5: meshes.add(Sphere::new(0.275)),
+        mine: meshes.add(Sphere::new(0.5)),
     };
 
     let mut add_cube = |index, pos| {
@@ -92,16 +142,12 @@ fn spawn(
             .id()
     };
 
-    let grid_size: (i32, i32, i32) = (3, 3, 3);
-    for i in 0..grid_size.0 {
-        for j in 0..grid_size.1 {
-            for k in 0..grid_size.2 {
-                let pos = Vec3::new(
-                    (i - grid_size.0 / 2) as f32,
-                    (j - grid_size.1 / 2) as f32,
-                    (k - grid_size.2 / 2) as f32,
-                );
-                add_cube((i as u32, j as u32, k as u32), pos);
+    let field_size = settings.field_size;
+    for i in 0..field_size[0] {
+        for j in 0..field_size[1] {
+            for k in 0..field_size[2] {
+                let pos = calculate_position([i, j, k], field_size);
+                add_cube([i, j, k], pos);
             }
         }
     }
@@ -113,14 +159,14 @@ fn spawn(
 #[derive(Event)]
 pub enum BlockEvent {
     /// Uncover a block, detonating any contained mines.
-    Reveal(Entity),
+    Reveal(Entity, Contains),
     /// Mark a block (or unmark if already marked) as containing a mine.
     Mark(Entity),
 }
 impl BlockEvent {
     pub fn block_id(&self) -> Entity {
         match self {
-            Self::Reveal(e) | Self::Mark(e) => *e,
+            Self::Reveal(e, _) | Self::Mark(e) => *e,
         }
     }
 }
@@ -131,6 +177,7 @@ fn click_on_block(
     main_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     blocks: Query<(Entity, &Block)>,
     mut block_events: EventWriter<BlockEvent>,
+    mut field_events: EventWriter<FieldEvent>,
 ) {
     let Some(cursor_pos) = primary_window.single().cursor_position() else {
         return;
@@ -147,7 +194,7 @@ fn click_on_block(
 
             let mut hits: Vec<_> = blocks
                 .iter()
-                .filter(|(_, block)| !block.revealed)
+                .filter(|(_, block)| block.revealed.is_none())
                 .filter_map(|(entity, block)| {
                     cast.aabb_intersection_at(&block.bb)
                         .map(|dist| (dist, entity, block))
@@ -165,7 +212,7 @@ fn click_on_block(
             debug!("Block {hit:?} {index:?} hit at {dist}");
             match mouse_event.button {
                 MouseButton::Left => {
-                    block_events.send(BlockEvent::Reveal(*hit));
+                    field_events.send(FieldEvent::Reveal(*hit, index));
                 }
                 MouseButton::Right => {
                     block_events.send(BlockEvent::Mark(*hit));
@@ -195,22 +242,60 @@ fn handle_block_events(
             }
         };
         match event {
-            BlockEvent::Reveal(entity) => {
-                debug!("Revealed block {entity:?}");
-                block.revealed = true;
+            BlockEvent::Reveal(entity, contains) => {
+                info!("Revealed block {entity:?}");
+                block.revealed = Some(*contains);
                 commands.entity(*entity).remove::<Handle<Mesh>>();
-                match block.adjacent {
-                    0 => {}
-                    _ => {
+                commands
+                    .entity(*entity)
+                    .remove::<Handle<StandardMaterial>>();
+                match contains {
+                    Contains::Mine => {
                         commands
                             .entity(*entity)
-                            .insert(block_meshes.revealed.clone());
+                            .insert(block_meshes.mine.clone())
+                            .insert(block_materials.mine.clone());
                     }
+                    Contains::Empty { adjacent_mines } => match adjacent_mines {
+                        0 => {}
+                        1 => {
+                            commands
+                                .entity(*entity)
+                                .insert(block_meshes.revealed_1.clone())
+                                .insert(block_materials.revealed_1.clone());
+                        }
+                        2 => {
+                            commands
+                                .entity(*entity)
+                                .insert(block_meshes.revealed_2.clone())
+                                .insert(block_materials.revealed_2.clone());
+                        }
+                        3 => {
+                            commands
+                                .entity(*entity)
+                                .insert(block_meshes.revealed_3.clone())
+                                .insert(block_materials.revealed_3.clone());
+                        }
+                        4 => {
+                            commands
+                                .entity(*entity)
+                                .insert(block_meshes.revealed_4.clone())
+                                .insert(block_materials.revealed_4.clone());
+                        }
+                        _ => {
+                            commands
+                                .entity(*entity)
+                                .insert(block_meshes.revealed_5.clone())
+                                .insert(block_materials.revealed_5.clone());
+                        }
+                    },
                 }
             }
             BlockEvent::Mark(entity) => {
                 debug!("Mark block {entity:?}");
-                commands.entity(*entity).remove::<Handle<StandardMaterial>>();
+                commands
+                    .entity(*entity)
+                    .remove::<Handle<StandardMaterial>>();
                 match block.marked {
                     true => {
                         debug!("Unmark block {entity:?} as mine");

@@ -1,0 +1,196 @@
+use bevy::prelude::*;
+use ndarray::prelude::*;
+use rand::prelude::*;
+
+use crate::{Block, BlockEvent, GameSettings, GameState};
+
+#[derive(Event)]
+pub enum FieldEvent {
+    Reveal(Entity, [usize; 3]),
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Cell {
+    contains: Contains,
+    revealed: bool,
+    block: Option<Entity>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Contains {
+    Mine,
+    Empty { adjacent_mines: u8 },
+}
+impl Default for Contains {
+    fn default() -> Self {
+        Self::Empty { adjacent_mines: 0 }
+    }
+}
+
+#[derive(Component)]
+pub struct Minefield {
+    cells: Array3<Cell>,
+    density: f64,
+}
+impl Minefield {
+    /// Initialize the [Minefield], placing mines randomly according to [Minefield::density].
+    fn initialize(&mut self, blocks: &Query<(Entity, &Block)>) {
+        debug!("Creating minefield");
+        let mut rng = rand::thread_rng();
+        // Save Block ids
+        for (entity, block) in blocks {
+            self.cells[block.index()].block = Some(entity)
+        }
+        // Place mines
+        for (index, cell) in self.cells.indexed_iter_mut() {
+            if cell.revealed {
+                // TODO: implement FirstClickSafety setting
+                debug!("Cell at {index:?} already revealed, will not place mine there");
+            } else if rng.gen_bool(self.density) {
+                cell.contains = Contains::Mine;
+            }
+        }
+        // Determine adjacent value in each cell
+        let mines: Vec<_> = self
+            .cells
+            .indexed_iter()
+            .filter_map(|(i, c)| match c.contains {
+                Contains::Mine => Some(i),
+                _ => None,
+            })
+            .collect();
+        for index in mines {
+            info!("Placed mine at {index:?}");
+            let (i, j, k) = index;
+            let mut increment_adjacent = |i_off, j_off, k_off| {
+                let adj_index = (
+                    i.wrapping_add_signed(i_off),
+                    j.wrapping_add_signed(j_off),
+                    k.wrapping_add_signed(k_off),
+                );
+                if let Some(adj) = self.cells.get_mut(adj_index) {
+                    if let Contains::Empty {
+                        ref mut adjacent_mines,
+                    } = adj.contains
+                    {
+                        debug!("Increment adjacent at {adj_index:?}");
+                        *adjacent_mines += 1;
+                    }
+                }
+            };
+            for i_off in -1..=1 {
+                for j_off in -1..=1 {
+                    for k_off in -1..=1 {
+                        // The block at index is not adjacent to itself
+                        if i_off == 0 && j_off == 0 && k_off == 0 {
+                            continue;
+                        }
+                        increment_adjacent(i_off, j_off, k_off);
+                    }
+                }
+            }
+        }
+    }
+    fn reveal_adjacent(
+        &mut self,
+        index: (usize, usize, usize),
+        block_events: &mut EventWriter<BlockEvent>,
+    ) {
+        let (i, j, k) = index;
+        for i_off in -1..=1 {
+            for j_off in -1..=1 {
+                for k_off in -1..=1 {
+                    // The block at index is not adjacent to itself
+                    if i_off == 0 && j_off == 0 && k_off == 0 {
+                        continue;
+                    }
+                    // Get a block adjacent to index
+                    let adj_index = (
+                        i.wrapping_add_signed(i_off),
+                        j.wrapping_add_signed(j_off),
+                        k.wrapping_add_signed(k_off),
+                    );
+                    // Make sure we have a valid adj_index
+                    let Some(adj) = self.cells.get_mut(adj_index) else {
+                        continue;
+                    };
+                    // If the adjacent block is already revealed, don't bother
+                    // TODO: maybe not good idea?
+                    if adj.revealed {
+                        continue;
+                    }
+                    let contains = adj.contains;
+                    // Don't reveal mines
+                    let Contains::Empty { adjacent_mines } = contains else {
+                        continue;
+                    };
+                    // Get the entity to send with the message
+                    let Some(adj_id) = adj.block else {
+                        continue;
+                    };
+                    adj.revealed = true;
+                    // Send a message to reveal this block
+                    info!("Sent [BlockEvent::Reveal]: {adj_index:?} {contains:?}");
+                    block_events.send(BlockEvent::Reveal(adj_id, contains));
+                    // Recurse only if this block was not adjacent to any mines
+                    if adjacent_mines == 0 {
+                        self.reveal_adjacent(adj_index, block_events);
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub struct MinefieldPlugin;
+impl Plugin for MinefieldPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(OnEnter(GameState::Start), spawn)
+            .add_systems(Update, handle_field_events)
+            .add_event::<FieldEvent>();
+    }
+}
+
+fn spawn(settings: Res<GameSettings>, mut commands: Commands) {
+    let field = Minefield {
+        cells: Array3::default(settings.field_size),
+        density: settings.mine_density.into(),
+    };
+    commands.spawn(field);
+}
+
+fn handle_field_events(
+    game_state: Res<State<GameState>>,
+    mut next_game_state: ResMut<NextState<GameState>>,
+    blocks: Query<(Entity, &Block)>,
+    mut field: Query<&mut Minefield>,
+    mut field_events: EventReader<FieldEvent>,
+    mut block_events: EventWriter<BlockEvent>,
+) {
+    for event in field_events.read() {
+        match event {
+            FieldEvent::Reveal(entity, index) => {
+                let mut field = field.single_mut();
+                let Some(cell) = field.cells.get_mut(*index) else {
+                    continue;
+                };
+                cell.revealed = true;
+                if matches!(game_state.get(), GameState::Start) {
+                    debug!("Transition to [GameState::Playing]");
+                    next_game_state.set(GameState::Playing);
+                    field.initialize(&blocks);
+                }
+                // Get the updated field
+                let Some(cell) = field.cells.get_mut(*index) else {
+                    continue;
+                };
+                let contains = cell.contains;
+                info!("Sent [BlockEvent::Reveal]: {index:?} {contains:?}");
+                block_events.send(BlockEvent::Reveal(*entity, contains));
+                if matches!(contains, Contains::Empty { adjacent_mines } if adjacent_mines == 0) {
+                    field.reveal_adjacent((index[0], index[1], index[2]), &mut block_events);
+                }
+            }
+        }
+    }
+}
