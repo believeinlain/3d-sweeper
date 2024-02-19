@@ -60,7 +60,7 @@ impl Minefield {
             })
             .collect();
         for index in mines {
-            info!("Placed mine at {index:?}");
+            debug!("Placed mine at {index:?}");
             let (i, j, k) = index;
             let mut increment_adjacent = |i_off, j_off, k_off| {
                 let adj_index = (
@@ -130,7 +130,7 @@ impl Minefield {
                     };
                     adj.revealed = true;
                     // Send a message to reveal this block
-                    info!("Sent [BlockEvent::Reveal]: {adj_index:?} {contains:?}");
+                    debug!("Sent [BlockEvent::Reveal]: {adj_index:?} {contains:?}");
                     block_events.send(BlockEvent::Reveal(adj_id, contains));
                     // Recurse only if this block was not adjacent to any mines
                     if adjacent_mines == 0 {
@@ -185,7 +185,7 @@ fn handle_field_events(
                     continue;
                 };
                 let contains = cell.contains;
-                info!("Sent [BlockEvent::Reveal]: {index:?} {contains:?}");
+                debug!("Sent [BlockEvent::Reveal]: {index:?} {contains:?}");
                 block_events.send(BlockEvent::Reveal(*entity, contains));
                 if matches!(contains, Contains::Empty { adjacent_mines } if adjacent_mines == 0) {
                     field.reveal_adjacent((index[0], index[1], index[2]), &mut block_events);
