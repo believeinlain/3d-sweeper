@@ -1,13 +1,31 @@
 [package]
 name = "sweeper-3d"
-version = "0.2.0"
+version = "0.1.1"
 edition = "2021"
 
 [dependencies]
-bevy = "0.13"
+bevy = { version = "0.13", default-features = false, features = [
+    "bevy_asset",
+    "bevy_audio",
+    "bevy_winit",
+    "bevy_render",
+    "bevy_text",
+    "bevy_pbr",
+    "multi-threaded",
+    "png",
+    "hdr",
+    "vorbis",
+    "x11",
+    "tonemapping_luts",
+    "default_font",
+] }
 bevy_egui = "0.25"
 ndarray = "0.15"
 rand = "0.8"
+
+# Optimize release build for size
+[profile.release]
+opt-level = 's'
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
@@ -18,4 +36,4 @@ opt-level = 1
 opt-level = 3
 
 [features]
-debug-draw = []
+debug-draw = ["bevy/bevy_gizmos"]
