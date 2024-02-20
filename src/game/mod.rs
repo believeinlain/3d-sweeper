@@ -79,3 +79,5 @@ fn cleanup_game(to_despawn: Query<Entity, With<GameComponent>>, mut commands: Co
         commands.entity(entity).despawn_recursive();
     }
 }
+
+// TAB - step away ______ -> asfgrdsgg
