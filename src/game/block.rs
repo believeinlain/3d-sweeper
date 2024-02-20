@@ -247,7 +247,7 @@ pub(super) fn handle_block_events(
         };
         match event {
             BlockEvent::Clear(entity, contains) => {
-                info!("Revealed block {entity:?}");
+                debug!("Revealed block {entity:?}");
                 block.revealed = Some(*contains);
                 commands.entity(*entity).remove::<Handle<Mesh>>();
                 commands
