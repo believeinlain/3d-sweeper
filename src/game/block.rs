@@ -2,8 +2,8 @@ use bevy::math::bounding::{Aabb3d, Bounded3d, RayCast3d};
 use bevy::prelude::*;
 
 use super::minefield::{Contains, FieldEvent};
-use super::{GameComponent, GameState};
 use super::RayEvent;
+use super::{GameComponent, GameState};
 use crate::Settings;
 
 #[derive(Component)]

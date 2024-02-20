@@ -58,6 +58,7 @@ fn display_main_menu(
     mut contexts: EguiContexts,
     mut settings: ResMut<Settings>,
     mut next_global_state: ResMut<NextState<GlobalState>>,
+    mut next_game_state: ResMut<NextState<GameState>>,
     mut exit_events: EventWriter<AppExit>,
 ) {
     let ctx = contexts.ctx_mut();
@@ -68,18 +69,22 @@ fn display_main_menu(
                 ui.horizontal_centered(|ui| {
                     if ui.add(egui::Button::new("Small")).clicked() {
                         settings.field_size = [3, 3, 3];
+                        next_game_state.set(GameState::Start);
                         next_global_state.set(GlobalState::Game);
                     }
                     if ui.add(egui::Button::new("Medium")).clicked() {
                         settings.field_size = [5, 5, 5];
+                        next_game_state.set(GameState::Start);
                         next_global_state.set(GlobalState::Game);
                     }
                     if ui.add(egui::Button::new("Large")).clicked() {
                         settings.field_size = [10, 10, 10];
+                        next_game_state.set(GameState::Start);
                         next_global_state.set(GlobalState::Game);
                     }
                     if ui.add(egui::Button::new("Custom")).clicked() {
                         settings.field_size = [3, 3, 3];
+                        next_game_state.set(GameState::Start);
                         next_global_state.set(GlobalState::Game);
                     }
                 });
@@ -107,6 +112,7 @@ fn display_game_over(
                 ui.horizontal_centered(|ui| {
                     if ui.add(egui::Button::new("Restart")).clicked() {
                         next_game_state.set(GameState::Start);
+                        next_global_state.set(GlobalState::Game);
                     }
                     if ui.add(egui::Button::new("Main Menu")).clicked() {
                         next_menu_state.set(MenuState::Main);

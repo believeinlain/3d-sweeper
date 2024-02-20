@@ -13,19 +13,19 @@ use crate::GlobalState;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
 pub enum GameState {
     /// Game has started, but no cell has been clicked yet.
-    #[default]
     Start,
     /// Game transitions to this state once the first cell is clicked.
     /// This is when the field actually initializes and determines mine placement.
     /// At this point the position of all mines is known.
     Playing,
     /// Game has ended, either by clicking on a mine or by clearing all non-mines.
+    #[default]
     Ended,
 }
 
 /// Marker component indicating an entity to be removed when the game is reset.
 #[derive(Component)]
-pub(self) struct GameComponent;
+struct GameComponent;
 
 /// [camera::camera_controls] consumes [crate::InputEvent] and produces [RayEvent].  
 /// [block::handle_ray_events] consumes [RayEvent] and produces [FieldEvent] and/or [BlockEvent].  
@@ -35,13 +35,13 @@ pub struct GamePlugin;
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         let playing_game = || in_state(GlobalState::Game).and_then(not(in_state(GameState::Ended)));
-        let on_game_setup = || OnEnter(GlobalState::Game);
+        let on_game_setup = || OnEnter(GameState::Start);
         app.init_state::<GameState>();
         // Run game cleanup to remove old entities before starting a new game
-        app.add_systems(on_game_setup(), cleanup_game);
+        app.add_systems(OnEnter(GameState::Start), cleanup_game);
         // Add Block systems
         app.add_systems(Startup, block::initialize)
-        .add_systems(on_game_setup(), block::setup.after(cleanup_game))
+            .add_systems(on_game_setup(), block::setup.after(cleanup_game))
             .add_systems(
                 Update,
                 (

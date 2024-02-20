@@ -3,7 +3,8 @@ use ndarray::prelude::*;
 use rand::prelude::*;
 
 use super::{
-    block::{Block, BlockEvent}, GameComponent, GameState
+    block::{Block, BlockEvent},
+    GameComponent, GameState,
 };
 use crate::Settings;
 
@@ -147,7 +148,7 @@ impl Minefield {
     /// Return true iff the Minefield has been fully revealed (victory condition)
     fn fully_revealed(&self) -> bool {
         for cell in &self.cells {
-            if !cell.revealed || !matches!(cell.contains, Contains::Mine) {
+            if !cell.revealed && !matches!(cell.contains, Contains::Mine) {
                 return false;
             }
         }
