@@ -106,23 +106,28 @@ fn display_game_over(
 ) {
     let ctx = contexts.ctx_mut();
     global_settings(ctx);
-    create_menu_window("Game Over").show(ctx, |ui| {
-        ui.allocate_ui(egui::Vec2::new(0.0, 0.0), |ui| {
-            ui.vertical_centered(|ui| {
-                ui.horizontal_centered(|ui| {
-                    if ui.add(egui::Button::new("Restart")).clicked() {
-                        next_game_state.set(GameState::Start);
-                        next_global_state.set(GlobalState::Game);
-                    }
-                    if ui.add(egui::Button::new("Main Menu")).clicked() {
-                        next_menu_state.set(MenuState::Main);
-                        next_global_state.set(GlobalState::Menu);
-                    }
-                    if ui.add(egui::Button::new("Quit")).clicked() {
-                        exit_events.send(AppExit);
-                    }
+    egui::Window::new("Game Over")
+        .anchor(Align2::CENTER_BOTTOM, [0.0, 0.0])
+        .collapsible(false)
+        .movable(false)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.allocate_ui(egui::Vec2::new(0.0, 0.0), |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.horizontal_centered(|ui| {
+                        if ui.add(egui::Button::new("Restart")).clicked() {
+                            next_game_state.set(GameState::Start);
+                            next_global_state.set(GlobalState::Game);
+                        }
+                        if ui.add(egui::Button::new("Main Menu")).clicked() {
+                            next_menu_state.set(MenuState::Main);
+                            next_global_state.set(GlobalState::Menu);
+                        }
+                        if ui.add(egui::Button::new("Quit")).clicked() {
+                            exit_events.send(AppExit);
+                        }
+                    });
                 });
             });
         });
-    });
 }
