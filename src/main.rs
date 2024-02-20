@@ -1,3 +1,6 @@
+// Disable console window in Windows
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use bevy::{log::LogPlugin, prelude::*, window::WindowResolution};
 
 mod game;
