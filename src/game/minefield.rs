@@ -3,8 +3,7 @@ use ndarray::prelude::*;
 use rand::prelude::*;
 
 use super::{
-    block::{Block, BlockEvent},
-    GameState,
+    block::{Block, BlockEvent}, GameComponent, GameState
 };
 use crate::Settings;
 
@@ -161,7 +160,7 @@ pub(super) fn spawn(settings: Res<Settings>, mut commands: Commands) {
         cells: Array3::default(settings.field_size),
         density: settings.mine_density.into(),
     };
-    commands.spawn(field);
+    commands.spawn((field, GameComponent));
 }
 
 pub(super) fn handle_field_events(

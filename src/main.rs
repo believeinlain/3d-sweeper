@@ -2,11 +2,12 @@ use bevy::{log::LogPlugin, prelude::*, window::WindowResolution};
 
 mod game;
 mod input;
-mod main_menu;
+mod menu;
 mod settings;
 
 use game::GamePlugin;
 use input::InputPlugin;
+use menu::MenuPlugin;
 use settings::SettingsPlugin;
 
 pub use input::InputEvent;
@@ -14,8 +15,8 @@ pub use settings::Settings;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
 pub enum GlobalState {
-    Menu,
     #[default]
+    Menu,
     Game,
 }
 
@@ -42,7 +43,7 @@ fn main() {
                 .set(ImagePlugin::default_nearest()),
         )
         .add_systems(Startup, setup)
-        .add_plugins((SettingsPlugin, GamePlugin, InputPlugin))
+        .add_plugins((MenuPlugin, SettingsPlugin, GamePlugin, InputPlugin))
         .run();
 }
 

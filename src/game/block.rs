@@ -2,7 +2,7 @@ use bevy::math::bounding::{Aabb3d, Bounded3d, RayCast3d};
 use bevy::prelude::*;
 
 use super::minefield::{Contains, FieldEvent};
-use super::GameState;
+use super::{GameComponent, GameState};
 use super::RayEvent;
 use crate::Settings;
 
@@ -63,8 +63,8 @@ fn calculate_position(index: [usize; 3], dim: [usize; 3]) -> Vec3 {
     )
 }
 
-pub(super) fn spawn(
-    settings: Res<Settings>,
+/// Initialize common meshes and materials that are re-used between games
+pub(super) fn initialize(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -113,6 +113,22 @@ pub(super) fn spawn(
         mine: meshes.add(Sphere::new(0.5)),
     };
 
+    // Keep the different possible meshes and materials for each block on a hidden entity
+    commands.spawn((block_meshes, block_materials, Visibility::Hidden));
+}
+
+/// Setup to be run when the game is started
+pub(super) fn setup(
+    settings: Res<Settings>,
+    mut commands: Commands,
+    block_meshes: Query<&BlockMeshes>,
+    block_materials: Query<&BlockMaterials>,
+) {
+    let block_meshes = block_meshes.single();
+    let block_materials = block_materials.single();
+
+    let cube = Cuboid::new(1.0, 1.0, 1.0);
+
     let mut add_cube = |index, pos| {
         let transform = Transform::from_translation(pos);
         let bb = cube.aabb_3d(transform.translation, transform.rotation);
@@ -125,6 +141,7 @@ pub(super) fn spawn(
                     ..default()
                 },
                 Block::new(bb, index),
+                GameComponent,
             ))
             .id()
     };
@@ -138,9 +155,6 @@ pub(super) fn spawn(
             }
         }
     }
-
-    // Keep the different possible meshes and materials for each block on a hidden entity
-    commands.spawn((block_meshes, block_materials, Visibility::Hidden));
 }
 
 #[derive(Debug, Event)]

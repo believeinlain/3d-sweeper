@@ -4,6 +4,8 @@ use bevy::prelude::*;
 
 use crate::{input::ScreenPosition, InputEvent};
 
+use super::GameComponent;
+
 #[derive(Component)]
 pub struct MainCamera {
     zoom_speed: f32,
@@ -36,6 +38,7 @@ pub(super) fn spawn(mut commands: Commands) {
             ..Default::default()
         },
         MainCamera::default(),
+        GameComponent,
     ));
 }
 
