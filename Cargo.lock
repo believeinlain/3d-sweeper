@@ -3365,7 +3365,7 @@ checksum = "8fb1df15f412ee2e9dfc1c504260fa695c1c3f10fe9f4a6ee2d2184d7d6450e2"
 
 [[package]]
 name = "sweeper-3d"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bevy",
  "bevy_egui",
