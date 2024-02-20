@@ -1,14 +1,21 @@
 use bevy::prelude::*;
 
+pub struct SettingsPlugin;
+impl Plugin for SettingsPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(Settings::default());
+    }
+}
+
 #[derive(Debug, Resource)]
-pub struct GameSettings {
+pub struct Settings {
     pub field_size: [usize; 3],
     /// Average density of mines (number of mines/number of cells)
     pub mine_density: f32,
     /// Minefield generation constraints after first click
     pub safety: FirstClickSafety,
 }
-impl Default for GameSettings {
+impl Default for Settings {
     fn default() -> Self {
         Self {
             field_size: [5, 5, 5],
@@ -29,11 +36,4 @@ pub enum FirstClickSafety {
     GuaranteedNoAdjacent,
     /// No guarantees - the first click could lose the game.
     Random,
-}
-
-pub struct GameSettingsPlugin;
-impl Plugin for GameSettingsPlugin {
-    fn build(&self, app: &mut App) {
-        app.insert_resource(GameSettings::default());
-    }
 }

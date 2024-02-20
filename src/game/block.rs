@@ -1,11 +1,10 @@
 use bevy::math::bounding::{Aabb3d, Bounded3d, RayCast3d};
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 
-use bevy::input::mouse::MouseButtonInput;
-
-use crate::camera::MainCamera;
-use crate::{Contains, FieldEvent, GameSettings, GameState};
+use super::minefield::{Contains, FieldEvent};
+use super::GameState;
+use super::RayEvent;
+use crate::Settings;
 
 #[derive(Component)]
 pub struct Block {
@@ -33,20 +32,8 @@ impl Block {
     }
 }
 
-pub struct BlockPlugin;
-impl Plugin for BlockPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Start), spawn)
-            .add_systems(Update, (click_on_block, handle_block_events))
-            .add_event::<BlockEvent>();
-
-        #[cfg(feature = "debug-draw")]
-        app.add_systems(Update, block_gizmos);
-    }
-}
-
 #[derive(Component)]
-struct BlockMeshes {
+pub(super) struct BlockMeshes {
     hidden: Handle<Mesh>,
     revealed_1: Handle<Mesh>,
     revealed_2: Handle<Mesh>,
@@ -57,7 +44,7 @@ struct BlockMeshes {
 }
 
 #[derive(Component)]
-struct BlockMaterials {
+pub(super) struct BlockMaterials {
     hidden: Handle<StandardMaterial>,
     marked: Handle<StandardMaterial>,
     revealed_1: Handle<StandardMaterial>,
@@ -76,8 +63,8 @@ fn calculate_position(index: [usize; 3], dim: [usize; 3]) -> Vec3 {
     )
 }
 
-fn spawn(
-    settings: Res<GameSettings>,
+pub(super) fn spawn(
+    settings: Res<Settings>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -156,79 +143,82 @@ fn spawn(
     commands.spawn((block_meshes, block_materials, Visibility::Hidden));
 }
 
-#[derive(Event)]
+#[derive(Debug, Event)]
 pub enum BlockEvent {
     /// Uncover a block, detonating any contained mines.
-    Reveal(Entity, Contains),
+    /// Received from the Minefield enitity after checking its contents.
+    Clear(Entity, Contains),
     /// Mark a block (or unmark if already marked) as containing a mine.
     Mark(Entity),
 }
 impl BlockEvent {
     pub fn block_id(&self) -> Entity {
         match self {
-            Self::Reveal(e, _) | Self::Mark(e) => *e,
+            Self::Clear(e, _) | Self::Mark(e) => *e,
         }
     }
 }
 
-fn click_on_block(
-    mut mouse_input: EventReader<MouseButtonInput>,
-    primary_window: Query<&Window, With<PrimaryWindow>>,
-    main_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+pub(super) fn handle_ray_events(
+    mut ray_events: EventReader<RayEvent>,
     blocks: Query<(Entity, &Block)>,
     mut block_events: EventWriter<BlockEvent>,
     mut field_events: EventWriter<FieldEvent>,
 ) {
-    let Some(cursor_pos) = primary_window.single().cursor_position() else {
-        return;
-    };
-    let (camera, camera_trans) = main_camera.single();
-    for mouse_event in mouse_input.read() {
-        if mouse_event.state.is_pressed() {
-            debug!("Click at {cursor_pos:?}");
-            let Some(ray) = super::camera::get_cursor_ray(camera, camera_trans, cursor_pos) else {
-                continue;
-            };
-            debug!("Cursor ray at {ray:?}");
-            let cast = RayCast3d::from_ray(ray, 100.0);
-
-            let mut hits: Vec<_> = blocks
-                .iter()
-                .filter(|(_, block)| block.revealed.is_none())
-                .filter_map(|(entity, block)| {
-                    cast.aabb_intersection_at(&block.bb)
-                        .map(|dist| (dist, entity, block))
-                })
-                .collect();
-            // Consider any unresolved comparisons to be equal (i.e. NaN == NaN)
-            hits.sort_unstable_by(|(a, _, _), (b, _, _)| {
-                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-            });
-
-            let Some((dist, hit, block)) = hits.first() else {
-                continue;
-            };
-            let index = block.index;
-            debug!("Block {hit:?} {index:?} hit at {dist}");
-            match mouse_event.button {
-                MouseButton::Left => {
-                    field_events.send(FieldEvent::Reveal(*hit, index));
+    for ray_event in ray_events.read() {
+        match ray_event {
+            RayEvent::ClearBlock(ray) => {
+                if let Some((block, entity, index)) = raycast_blocks(*ray, &blocks) {
+                    if !block.marked {
+                        debug!("Send FieldEvent::ClearBlock");
+                        field_events.send(FieldEvent::ClearBlock(entity, index));
+                    }
                 }
-                MouseButton::Right => {
-                    block_events.send(BlockEvent::Mark(*hit));
+            }
+            RayEvent::MarkBlock(ray) => {
+                if let Some((_block, entity, _index)) = raycast_blocks(*ray, &blocks) {
+                    debug!("Send BlockEvent::Mark");
+                    block_events.send(BlockEvent::Mark(entity));
                 }
-                _ => {}
-            };
+            }
         }
     }
 }
 
-fn handle_block_events(
+fn raycast_blocks<'a>(
+    ray: Ray3d,
+    blocks: &'a Query<(Entity, &Block)>,
+) -> Option<(&'a Block, Entity, [usize; 3])> {
+    let cast = RayCast3d::from_ray(ray, 100.0);
+
+    let mut hits: Vec<_> = blocks
+        .iter()
+        .filter(|(_, block)| block.revealed.is_none())
+        .filter_map(|(entity, block)| {
+            cast.aabb_intersection_at(&block.bb)
+                .map(|dist| (dist, entity, block))
+        })
+        .collect();
+
+    // Sort hits by distance
+    // Consider any unresolved comparisons to be equal (i.e. NaN == NaN)
+    hits.sort_unstable_by(|(a, _, _), (b, _, _)| {
+        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let (dist, hit, block) = hits.first()?;
+    let index = block.index;
+    debug!("Block {hit:?} {index:?} hit at {dist}");
+    Some((block, *hit, index))
+}
+
+pub(super) fn handle_block_events(
     mut commands: Commands,
     mut block_events: EventReader<BlockEvent>,
     mut blocks: Query<&mut Block>,
     block_meshes: Query<&BlockMeshes>,
     block_materials: Query<&BlockMaterials>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     let block_meshes = block_meshes.single();
     let block_materials = block_materials.single();
@@ -242,7 +232,7 @@ fn handle_block_events(
             }
         };
         match event {
-            BlockEvent::Reveal(entity, contains) => {
+            BlockEvent::Clear(entity, contains) => {
                 info!("Revealed block {entity:?}");
                 block.revealed = Some(*contains);
                 commands.entity(*entity).remove::<Handle<Mesh>>();
@@ -255,6 +245,7 @@ fn handle_block_events(
                             .entity(*entity)
                             .insert(block_meshes.mine.clone())
                             .insert(block_materials.mine.clone());
+                        next_state.set(GameState::Ended);
                     }
                     Contains::Empty { adjacent_mines } => match adjacent_mines {
                         0 => {}

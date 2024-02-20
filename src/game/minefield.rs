@@ -2,11 +2,15 @@ use bevy::prelude::*;
 use ndarray::prelude::*;
 use rand::prelude::*;
 
-use crate::{Block, BlockEvent, GameSettings, GameState};
+use super::{
+    block::{Block, BlockEvent},
+    GameState,
+};
+use crate::Settings;
 
 #[derive(Event)]
 pub enum FieldEvent {
-    Reveal(Entity, [usize; 3]),
+    ClearBlock(Entity, [usize; 3]),
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -130,8 +134,9 @@ impl Minefield {
                     };
                     adj.revealed = true;
                     // Send a message to reveal this block
-                    debug!("Sent [BlockEvent::Reveal]: {adj_index:?} {contains:?}");
-                    block_events.send(BlockEvent::Reveal(adj_id, contains));
+                    let event = BlockEvent::Clear(adj_id, contains);
+                    debug!("Send {event:?}");
+                    block_events.send(event);
                     // Recurse only if this block was not adjacent to any mines
                     if adjacent_mines == 0 {
                         self.reveal_adjacent(adj_index, block_events);
@@ -140,18 +145,18 @@ impl Minefield {
             }
         }
     }
-}
-
-pub struct MinefieldPlugin;
-impl Plugin for MinefieldPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Start), spawn)
-            .add_systems(Update, handle_field_events)
-            .add_event::<FieldEvent>();
+    /// Return true iff the Minefield has been fully revealed (victory condition)
+    fn fully_revealed(&self) -> bool {
+        for cell in &self.cells {
+            if !cell.revealed || !matches!(cell.contains, Contains::Mine) {
+                return false;
+            }
+        }
+        true
     }
 }
 
-fn spawn(settings: Res<GameSettings>, mut commands: Commands) {
+pub(super) fn spawn(settings: Res<Settings>, mut commands: Commands) {
     let field = Minefield {
         cells: Array3::default(settings.field_size),
         density: settings.mine_density.into(),
@@ -159,9 +164,9 @@ fn spawn(settings: Res<GameSettings>, mut commands: Commands) {
     commands.spawn(field);
 }
 
-fn handle_field_events(
+pub(super) fn handle_field_events(
     game_state: Res<State<GameState>>,
-    mut next_game_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<GameState>>,
     blocks: Query<(Entity, &Block)>,
     mut field: Query<&mut Minefield>,
     mut field_events: EventReader<FieldEvent>,
@@ -169,15 +174,15 @@ fn handle_field_events(
 ) {
     for event in field_events.read() {
         match event {
-            FieldEvent::Reveal(entity, index) => {
+            FieldEvent::ClearBlock(entity, index) => {
                 let mut field = field.single_mut();
                 let Some(cell) = field.cells.get_mut(*index) else {
                     continue;
                 };
                 cell.revealed = true;
                 if matches!(game_state.get(), GameState::Start) {
-                    debug!("Transition to [GameState::Playing]");
-                    next_game_state.set(GameState::Playing);
+                    debug!("Transition to GameState::Playing");
+                    next_state.set(GameState::Playing);
                     field.initialize(&blocks);
                 }
                 // Get the updated field
@@ -185,10 +190,16 @@ fn handle_field_events(
                     continue;
                 };
                 let contains = cell.contains;
-                debug!("Sent [BlockEvent::Reveal]: {index:?} {contains:?}");
-                block_events.send(BlockEvent::Reveal(*entity, contains));
+                let event = BlockEvent::Clear(*entity, contains);
+                debug!("Send {event:?}");
+                block_events.send(event);
                 if matches!(contains, Contains::Empty { adjacent_mines } if adjacent_mines == 0) {
                     field.reveal_adjacent((index[0], index[1], index[2]), &mut block_events);
+                }
+                if field.fully_revealed() {
+                    info!("Victory!");
+                    debug!("Transition to GameState::Ended");
+                    next_state.set(GameState::Ended);
                 }
             }
         }

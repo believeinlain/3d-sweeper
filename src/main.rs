@@ -1,36 +1,27 @@
-use bevy::{
-    app::AppExit, input::keyboard::KeyboardInput, log::LogPlugin, prelude::*,
-    window::WindowResolution,
-};
+use bevy::{log::LogPlugin, prelude::*, window::WindowResolution};
 
-mod block;
-mod camera;
-mod minefield;
+mod game;
+mod input;
+mod main_menu;
 mod settings;
 
-use block::BlockPlugin;
-use camera::MainCameraPlugin;
-use minefield::MinefieldPlugin;
-use settings::GameSettingsPlugin;
+use game::GamePlugin;
+use input::InputPlugin;
+use settings::SettingsPlugin;
 
-pub use block::{Block, BlockEvent};
-pub use minefield::{Contains, FieldEvent};
-pub use settings::GameSettings;
+pub use input::InputEvent;
+pub use settings::Settings;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
-pub enum GameState {
-    /// Game has started, but no cell has been clicked yet.
+pub enum GlobalState {
+    Menu,
     #[default]
-    Start,
-    /// Game transitions to this state once the first cell is clicked.
-    /// This is when the field actually initializes and determines mine placement.
-    /// At this point the position of all mines is known.
-    Playing,
+    Game,
 }
 
 fn main() {
     App::new()
-        .init_state::<GameState>()
+        .init_state::<GlobalState>()
         .add_plugins(
             DefaultPlugins
                 // Window settings
@@ -51,13 +42,7 @@ fn main() {
                 .set(ImagePlugin::default_nearest()),
         )
         .add_systems(Startup, setup)
-        .add_systems(Update, handle_key_events)
-        .add_plugins((
-            GameSettingsPlugin,
-            MinefieldPlugin,
-            BlockPlugin,
-            MainCameraPlugin,
-        ))
+        .add_plugins((SettingsPlugin, GamePlugin, InputPlugin))
         .run();
 }
 
@@ -76,21 +61,4 @@ fn setup(mut commands: Commands) {
         brightness: 80.0,
         color: Color::rgb(0.9, 0.9, 1.0),
     });
-}
-
-fn handle_key_events(
-    mut key_events: EventReader<KeyboardInput>,
-    mut exit_events: EventWriter<AppExit>,
-) {
-    for event in key_events.read() {
-        match event {
-            KeyboardInput {
-                key_code, state, ..
-            } if matches!(key_code, KeyCode::Escape) && state.is_pressed() => {
-                info!("Pressed ESC key, exiting...");
-                exit_events.send(AppExit);
-            }
-            _ => {}
-        }
-    }
 }
