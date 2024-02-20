@@ -17,7 +17,7 @@ impl Default for MainCamera {
         Self {
             zoom_speed: 1.0,
             zoom_limit_near: 1.0,
-            zoom_limit_far: 15.0,
+            zoom_limit_far: 20.0,
         }
     }
 }

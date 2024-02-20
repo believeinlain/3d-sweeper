@@ -7,13 +7,37 @@ impl Plugin for SettingsPlugin {
     }
 }
 
-#[derive(Debug, Resource)]
+#[derive(Debug, Resource, PartialEq)]
 pub struct Settings {
     pub field_size: [usize; 3],
     /// Average density of mines (number of mines/number of cells)
     pub mine_density: f32,
     /// Minefield generation constraints after first click
     pub safety: FirstClickSafety,
+}
+impl Settings {
+    pub fn small() -> Self {
+        Self {
+            field_size: [3, 3, 3],
+            ..default()
+        }
+    }
+    pub fn medium() -> Self {
+        Self {
+            field_size: [5, 5, 5],
+            ..default()
+        }
+    }
+    pub fn large() -> Self {
+        Self {
+            field_size: [10, 10, 10],
+            ..default()
+        }
+    }
+    /// Split this struct into mutable fields that can be passed to UI elements
+    pub fn fields_mut(&mut self) -> (&mut [usize], &mut f32, &mut FirstClickSafety) {
+        (self.field_size.as_mut_slice(), &mut self.mine_density, &mut self.safety)
+    }
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -27,7 +51,7 @@ impl Default for Settings {
 
 /// Define conditions imposed on the mine generation after the
 /// first click.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub enum FirstClickSafety {
     /// The first click is guaranteed to be safe, but not necessarily convenient.
     #[default]
