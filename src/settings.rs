@@ -36,7 +36,11 @@ impl Settings {
     }
     /// Split this struct into mutable fields that can be passed to UI elements
     pub fn fields_mut(&mut self) -> (&mut [usize], &mut f32, &mut FirstClickSafety) {
-        (self.field_size.as_mut_slice(), &mut self.mine_density, &mut self.safety)
+        (
+            self.field_size.as_mut_slice(),
+            &mut self.mine_density,
+            &mut self.safety,
+        )
     }
 }
 impl Default for Settings {
