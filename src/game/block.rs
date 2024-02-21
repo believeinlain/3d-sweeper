@@ -1,3 +1,4 @@
+use bevy::audio::PlaybackMode;
 use bevy::math::bounding::{Aabb3d, Bounded3d, RayCast3d};
 use bevy::prelude::*;
 
@@ -228,12 +229,14 @@ fn raycast_blocks<'a>(
 
 pub(super) fn handle_block_events(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut block_events: EventReader<BlockEvent>,
     mut blocks: Query<&mut Block>,
     block_meshes: Query<&BlockMeshes>,
     block_materials: Query<&BlockMaterials>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
+    let mut any_blocks_cleared = false;
     let block_meshes = block_meshes.single();
     let block_materials = block_materials.single();
     for event in block_events.read() {
@@ -249,9 +252,10 @@ pub(super) fn handle_block_events(
             BlockEvent::Clear(entity, contains) => {
                 debug!("Revealed block {entity:?}");
                 block.revealed = Some(*contains);
-                commands.entity(*entity).remove::<Handle<Mesh>>();
+                any_blocks_cleared = true;
                 commands
                     .entity(*entity)
+                    .remove::<Handle<Mesh>>()
                     .remove::<Handle<StandardMaterial>>();
                 match contains {
                     Contains::Mine => {
@@ -319,6 +323,15 @@ pub(super) fn handle_block_events(
                 }
             }
         }
+    }
+    if any_blocks_cleared {
+        commands.spawn(AudioBundle {
+            source: asset_server.load("pop2.ogg"),
+            settings: PlaybackSettings {
+                mode: PlaybackMode::Despawn,
+                ..default()
+            },
+        });
     }
 }
 
