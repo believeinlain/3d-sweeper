@@ -54,8 +54,13 @@ pub(super) fn camera_controls(
                 let delta_x = delta.x * TAU;
                 let delta_y = delta.y * PI;
                 // Rotate around local X axis and global Y axis
-                let y_rot = Quat::from_axis_angle(Vec3::Y, -delta_x);
-                let x_rot = Quat::from_axis_angle(*transform.local_x(), -delta_y);
+                let camera_tilt = transform.up().dot(Vec3::Y);
+                debug!("Camera tilt: {camera_tilt}");
+                let x_rot = Quat::from_axis_angle(
+                    Vec3::Y,
+                    if camera_tilt > 0.0 { -delta_x } else { delta_x },
+                );
+                let y_rot = Quat::from_axis_angle(*transform.local_x(), -delta_y);
                 transform.rotate_around(Vec3::ZERO, x_rot);
                 transform.rotate_around(Vec3::ZERO, y_rot);
             }
