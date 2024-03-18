@@ -71,12 +71,12 @@ pub(super) fn initialize(
     commands.insert_resource(BlockAssets {
         hidden_mesh: asset_server.load("block_01.gltf#Mesh0/Primitive0"),
         reveal_sound: asset_server.load("pop2.ogg"),
-        revealed_1_mesh: meshes.add(Sphere::new(0.1)),
-        revealed_2_mesh: meshes.add(Sphere::new(0.15)),
-        revealed_3_mesh: meshes.add(Sphere::new(0.2)),
-        revealed_4_mesh: meshes.add(Sphere::new(0.25)),
-        revealed_5_mesh: meshes.add(Sphere::new(0.275)),
-        mine_mesh: meshes.add(Sphere::new(0.5)),
+        revealed_1_mesh: meshes.add(Sphere::new(0.1).mesh().ico(4).unwrap()),
+        revealed_2_mesh: meshes.add(Sphere::new(0.15).mesh().ico(4).unwrap()),
+        revealed_3_mesh: meshes.add(Sphere::new(0.2).mesh().ico(4).unwrap()),
+        revealed_4_mesh: meshes.add(Sphere::new(0.25).mesh().ico(4).unwrap()),
+        revealed_5_mesh: meshes.add(Sphere::new(0.275).mesh().ico(4).unwrap()),
+        mine_mesh: meshes.add(Sphere::new(0.5).mesh().ico(4).unwrap()),
         hidden_mat: materials.add(StandardMaterial {
             base_color_texture: Some(asset_server.load("concrete_02_albedo.png")),
             metallic_roughness_texture: Some(asset_server.load("concrete_02_orm.png")),
