@@ -33,27 +33,24 @@ impl Block {
     }
 }
 
-#[derive(Component)]
-pub(super) struct BlockMeshes {
-    hidden: Handle<Mesh>,
-    revealed_1: Handle<Mesh>,
-    revealed_2: Handle<Mesh>,
-    revealed_3: Handle<Mesh>,
-    revealed_4: Handle<Mesh>,
-    revealed_5: Handle<Mesh>,
-    mine: Handle<Mesh>,
-}
-
-#[derive(Component)]
-pub(super) struct BlockMaterials {
-    hidden: Handle<StandardMaterial>,
-    marked: Handle<StandardMaterial>,
-    revealed_1: Handle<StandardMaterial>,
-    revealed_2: Handle<StandardMaterial>,
-    revealed_3: Handle<StandardMaterial>,
-    revealed_4: Handle<StandardMaterial>,
-    revealed_5: Handle<StandardMaterial>,
-    mine: Handle<StandardMaterial>,
+#[derive(Resource)]
+pub(super) struct BlockAssets {
+    hidden_mesh: Handle<Mesh>,
+    reveal_sound: Handle<AudioSource>,
+    revealed_1_mesh: Handle<Mesh>,
+    revealed_2_mesh: Handle<Mesh>,
+    revealed_3_mesh: Handle<Mesh>,
+    revealed_4_mesh: Handle<Mesh>,
+    revealed_5_mesh: Handle<Mesh>,
+    mine_mesh: Handle<Mesh>,
+    hidden_mat: Handle<StandardMaterial>,
+    marked_mat: Handle<StandardMaterial>,
+    revealed_1_mat: Handle<StandardMaterial>,
+    revealed_2_mat: Handle<StandardMaterial>,
+    revealed_3_mat: Handle<StandardMaterial>,
+    revealed_4_mat: Handle<StandardMaterial>,
+    revealed_5_mat: Handle<StandardMaterial>,
+    mine_mat: Handle<StandardMaterial>,
 }
 
 fn calculate_position(index: [usize; 3], dim: [usize; 3]) -> Vec3 {
@@ -69,65 +66,62 @@ pub(super) fn initialize(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
 ) {
-    let block_materials = BlockMaterials {
-        hidden: materials.add(StandardMaterial::default()),
-        marked: materials.add(StandardMaterial {
+    commands.insert_resource(BlockAssets {
+        hidden_mesh: asset_server.load("block_01.gltf#Mesh0/Primitive0"),
+        reveal_sound: asset_server.load("pop2.ogg"),
+        revealed_1_mesh: meshes.add(Sphere::new(0.1)),
+        revealed_2_mesh: meshes.add(Sphere::new(0.15)),
+        revealed_3_mesh: meshes.add(Sphere::new(0.2)),
+        revealed_4_mesh: meshes.add(Sphere::new(0.25)),
+        revealed_5_mesh: meshes.add(Sphere::new(0.275)),
+        mine_mesh: meshes.add(Sphere::new(0.5)),
+        hidden_mat: materials.add(StandardMaterial {
+            base_color_texture: Some(asset_server.load("concrete_02_albedo.png")),
+            metallic_roughness_texture: Some(asset_server.load("concrete_02_orm.png")),
+            perceptual_roughness: 1.0,
+            metallic: 0.0,
+            normal_map_texture: Some(asset_server.load("concrete_02_normal.png")),
+            ..default()
+        }),
+        marked_mat: materials.add(StandardMaterial {
             base_color: Color::RED,
             ..default()
         }),
-        revealed_1: materials.add(StandardMaterial {
+        revealed_1_mat: materials.add(StandardMaterial {
             base_color: Color::BLUE,
             ..default()
         }),
-        revealed_2: materials.add(StandardMaterial {
+        revealed_2_mat: materials.add(StandardMaterial {
             base_color: Color::GREEN,
             ..default()
         }),
-        revealed_3: materials.add(StandardMaterial {
+        revealed_3_mat: materials.add(StandardMaterial {
             base_color: Color::RED,
             ..default()
         }),
-        revealed_4: materials.add(StandardMaterial {
+        revealed_4_mat: materials.add(StandardMaterial {
             base_color: Color::ORANGE,
             ..default()
         }),
-        revealed_5: materials.add(StandardMaterial {
+        revealed_5_mat: materials.add(StandardMaterial {
             base_color: Color::PURPLE,
             ..default()
         }),
-        mine: materials.add(StandardMaterial {
+        mine_mat: materials.add(StandardMaterial {
             base_color: Color::DARK_GRAY,
             ..default()
         }),
-    };
-
-    let cube = Cuboid::new(1.0, 1.0, 1.0);
-
-    let block_meshes = BlockMeshes {
-        hidden: meshes.add(cube),
-        revealed_1: meshes.add(Sphere::new(0.1)),
-        revealed_2: meshes.add(Sphere::new(0.15)),
-        revealed_3: meshes.add(Sphere::new(0.2)),
-        revealed_4: meshes.add(Sphere::new(0.25)),
-        revealed_5: meshes.add(Sphere::new(0.275)),
-        mine: meshes.add(Sphere::new(0.5)),
-    };
-
-    // Keep the different possible meshes and materials for each block on a hidden entity
-    commands.spawn((block_meshes, block_materials, Visibility::Hidden));
+    })
 }
 
 /// Setup to be run when the game is started
 pub(super) fn setup(
     settings: Res<Settings>,
     mut commands: Commands,
-    block_meshes: Query<&BlockMeshes>,
-    block_materials: Query<&BlockMaterials>,
+    block_assets: Res<BlockAssets>,
 ) {
-    let block_meshes = block_meshes.single();
-    let block_materials = block_materials.single();
-
     let cube = Cuboid::new(1.0, 1.0, 1.0);
 
     let mut add_cube = |index, pos| {
@@ -136,8 +130,8 @@ pub(super) fn setup(
         commands
             .spawn((
                 PbrBundle {
-                    mesh: block_meshes.hidden.clone(),
-                    material: block_materials.hidden.clone(),
+                    mesh: block_assets.hidden_mesh.clone(),
+                    material: block_assets.hidden_mat.clone(),
                     transform,
                     ..default()
                 },
@@ -229,16 +223,12 @@ fn raycast_blocks<'a>(
 
 pub(super) fn handle_block_events(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut block_events: EventReader<BlockEvent>,
     mut blocks: Query<&mut Block>,
-    block_meshes: Query<&BlockMeshes>,
-    block_materials: Query<&BlockMaterials>,
+    block_assets: Res<BlockAssets>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     let mut any_blocks_cleared = false;
-    let block_meshes = block_meshes.single();
-    let block_materials = block_materials.single();
     for event in block_events.read() {
         let id = event.block_id();
         let mut block = match blocks.get_mut(id) {
@@ -261,8 +251,8 @@ pub(super) fn handle_block_events(
                     Contains::Mine => {
                         commands
                             .entity(*entity)
-                            .insert(block_meshes.mine.clone())
-                            .insert(block_materials.mine.clone());
+                            .insert(block_assets.mine_mesh.clone())
+                            .insert(block_assets.mine_mat.clone());
                         next_state.set(GameState::Ended);
                     }
                     Contains::Empty { adjacent_mines } => match adjacent_mines {
@@ -270,32 +260,32 @@ pub(super) fn handle_block_events(
                         1 => {
                             commands
                                 .entity(*entity)
-                                .insert(block_meshes.revealed_1.clone())
-                                .insert(block_materials.revealed_1.clone());
+                                .insert(block_assets.revealed_1_mesh.clone())
+                                .insert(block_assets.revealed_1_mat.clone());
                         }
                         2 => {
                             commands
                                 .entity(*entity)
-                                .insert(block_meshes.revealed_2.clone())
-                                .insert(block_materials.revealed_2.clone());
+                                .insert(block_assets.revealed_2_mesh.clone())
+                                .insert(block_assets.revealed_2_mat.clone());
                         }
                         3 => {
                             commands
                                 .entity(*entity)
-                                .insert(block_meshes.revealed_3.clone())
-                                .insert(block_materials.revealed_3.clone());
+                                .insert(block_assets.revealed_3_mesh.clone())
+                                .insert(block_assets.revealed_3_mat.clone());
                         }
                         4 => {
                             commands
                                 .entity(*entity)
-                                .insert(block_meshes.revealed_4.clone())
-                                .insert(block_materials.revealed_4.clone());
+                                .insert(block_assets.revealed_4_mesh.clone())
+                                .insert(block_assets.revealed_4_mat.clone());
                         }
                         _ => {
                             commands
                                 .entity(*entity)
-                                .insert(block_meshes.revealed_5.clone())
-                                .insert(block_materials.revealed_5.clone());
+                                .insert(block_assets.revealed_5_mesh.clone())
+                                .insert(block_assets.revealed_5_mat.clone());
                         }
                     },
                 }
@@ -311,14 +301,14 @@ pub(super) fn handle_block_events(
                         block.marked = false;
                         commands
                             .entity(*entity)
-                            .insert(block_materials.hidden.clone());
+                            .insert(block_assets.hidden_mat.clone());
                     }
                     false => {
                         debug!("Mark block {entity:?} as mine");
                         block.marked = true;
                         commands
                             .entity(*entity)
-                            .insert(block_materials.marked.clone());
+                            .insert(block_assets.marked_mat.clone());
                     }
                 }
             }
@@ -326,7 +316,7 @@ pub(super) fn handle_block_events(
     }
     if any_blocks_cleared {
         commands.spawn(AudioBundle {
-            source: asset_server.load("pop2.ogg"),
+            source: block_assets.reveal_sound.clone(),
             settings: PlaybackSettings {
                 mode: PlaybackMode::Despawn,
                 ..default()

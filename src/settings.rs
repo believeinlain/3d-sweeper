@@ -13,7 +13,7 @@ pub struct Settings {
     /// Average density of mines (number of mines/number of cells)
     pub mine_density: f32,
     /// Minefield generation constraints after first click
-    pub safety: FirstClickSafety,
+    pub safety: Safety,
 }
 impl Settings {
     pub fn small() -> Self {
@@ -35,7 +35,7 @@ impl Settings {
         }
     }
     /// Split this struct into mutable fields that can be passed to UI elements
-    pub fn fields_mut(&mut self) -> (&mut [usize], &mut f32, &mut FirstClickSafety) {
+    pub fn fields_mut(&mut self) -> (&mut [usize], &mut f32, &mut Safety) {
         (
             self.field_size.as_mut_slice(),
             &mut self.mine_density,
@@ -48,7 +48,7 @@ impl Default for Settings {
         Self {
             field_size: [5, 5, 5],
             mine_density: 0.1,
-            safety: FirstClickSafety::default(),
+            safety: Safety::default(),
         }
     }
 }
@@ -56,12 +56,12 @@ impl Default for Settings {
 /// Define conditions imposed on the mine generation after the
 /// first click.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub enum FirstClickSafety {
+pub enum Safety {
     /// The first click is guaranteed to be safe, but not necessarily convenient.
     #[default]
-    GuaranteedEmpty,
+    Safe,
     /// The first click is guranteed to not be adjacent to a mine.
-    GuaranteedNoAdjacent,
+    Clear,
     /// No guarantees - the first click could lose the game.
     Random,
 }

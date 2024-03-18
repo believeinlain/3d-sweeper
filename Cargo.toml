@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 bevy = { version = "0.13", default-features = false, features = [
+    "bevy_gltf",
     "bevy_asset",
     "bevy_audio",
     "bevy_winit",
@@ -20,6 +21,7 @@ bevy = { version = "0.13", default-features = false, features = [
     "default_font",
 ] }
 bevy_egui = "0.25"
+egui_extras = { version = "0.26", features = ["svg"] }
 ndarray = "0.15"
 rand = "0.8"
 

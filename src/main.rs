@@ -31,6 +31,7 @@ fn main() {
                 // Window settings
                 .set(WindowPlugin {
                     primary_window: Some(Window {
+                        visible: false,
                         resolution: WindowResolution::new(1024.0, 768.0),
                         title: "3D Sweeper".to_string(),
                         ..default()
@@ -50,19 +51,20 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, mut window: Query<&mut Window>) {
+    window.single_mut().visible = true;
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 1000.0,
+            illuminance: 1200.0,
             shadows_enabled: true,
-            color: Color::rgb(1.0, 0.9, 0.85),
+            color: Color::rgb(1.0, 0.95, 0.90),
             ..default()
         },
         transform: Transform::from_xyz(-1.0, 1.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
     commands.insert_resource(AmbientLight {
-        brightness: 80.0,
-        color: Color::rgb(0.9, 0.9, 1.0),
+        brightness: 100.0,
+        color: Color::rgb(0.95, 0.95, 1.0),
     });
 }

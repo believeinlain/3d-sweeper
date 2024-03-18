@@ -4,7 +4,7 @@ use bevy_egui::{
     EguiContexts, EguiPlugin,
 };
 
-use crate::{game::GameState, GlobalState, Settings};
+use crate::{game::GameState, settings::Safety, GlobalState, Settings};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
 pub enum MenuState {
@@ -155,13 +155,31 @@ fn display_custom_menu(
 
 fn display_settings_menu(
     mut contexts: EguiContexts,
+    mut settings: ResMut<Settings>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
 ) {
+    let (_, _, safety) = settings.fields_mut();
     let ctx = contexts.ctx_mut();
     global_settings(ctx);
     create_menu_window("Settings").show(ctx, |ui| {
         ui.allocate_ui(egui::Vec2::new(0.0, 0.0), |ui| {
             ui.vertical_centered(|ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.label("First Block Safety:");
+                    ui.radio_value(safety, Safety::Safe, "Guaranteed Safe")
+                        .on_hover_text_at_pointer(concat!(
+                            "The first block cleared is guaranteed to be safe, ",
+                            "but may only reveal one space."
+                        ));
+                    ui.radio_value(safety, Safety::Clear, "Guaranteed Clear")
+                        .on_hover_text_at_pointer(
+                            "The first block cleared is guaranteed to reveal more than one space.",
+                        );
+                    ui.radio_value(safety, Safety::Random, "Random")
+                        .on_hover_text_at_pointer(
+                            "No safety guarantees - the first block cleared might contain a mine.",
+                        );
+                });
                 ui.horizontal_centered(|ui| {
                     if ui.add(egui::Button::new("Back")).clicked() {
                         next_menu_state.set(MenuState::Main);
