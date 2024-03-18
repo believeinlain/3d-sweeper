@@ -3,6 +3,9 @@
 
 use bevy::{log::LogPlugin, prelude::*, window::WindowResolution};
 
+const SMALL_SCALE: Vec3 = Vec3::splat(0.5);
+const LARGE_SCALE: Vec3 = Vec3::splat(1.0);
+
 fn main() {
     App::new()
         .add_plugins(
@@ -89,63 +92,67 @@ fn setup(
             });
         };
 
-    let spawn_1 =
-        |transform, commands: &mut Commands, materials: &mut ResMut<Assets<StandardMaterial>>| {
-            commands.spawn(PbrBundle {
-                mesh: asset_server.load("sweeper_objects.gltf#Mesh3/Primitive0"),
+    let spawn_1 = |transform: Transform,
+                   commands: &mut Commands,
+                   materials: &mut ResMut<Assets<StandardMaterial>>| {
+        commands.spawn(PbrBundle {
+            mesh: asset_server.load("sweeper_objects.gltf#Mesh3/Primitive0"),
+            material: materials.add(StandardMaterial {
+                base_color: Color::BLUE,
+                ..default()
+            }),
+            transform,
+            ..default()
+        });
+    };
+
+    let spawn_2 = |transform: Transform,
+                   commands: &mut Commands,
+                   materials: &mut ResMut<Assets<StandardMaterial>>| {
+        commands
+            .spawn(PbrBundle {
+                mesh: asset_server.load("sweeper_objects.gltf#Mesh2/Primitive0"),
                 material: materials.add(StandardMaterial {
-                    base_color: Color::BLUE,
+                    base_color: Color::GREEN,
                     ..default()
                 }),
                 transform,
                 ..default()
-            });
-        };
+            })
+            .insert(Rotate(-0.01));
+    };
 
-    let spawn_2 =
-        |transform, commands: &mut Commands, materials: &mut ResMut<Assets<StandardMaterial>>| {
-            commands
-                .spawn(PbrBundle {
-                    mesh: asset_server.load("sweeper_objects.gltf#Mesh2/Primitive0"),
-                    material: materials.add(StandardMaterial {
-                        base_color: Color::GREEN,
-                        ..default()
-                    }),
-                    transform,
+    let spawn_3 = |transform: Transform,
+                   commands: &mut Commands,
+                   materials: &mut ResMut<Assets<StandardMaterial>>| {
+        commands
+            .spawn(PbrBundle {
+                mesh: asset_server.load("sweeper_objects.gltf#Mesh0/Primitive0"),
+                material: materials.add(StandardMaterial {
+                    base_color: Color::RED,
                     ..default()
-                })
-                .insert(Rotate(-0.01));
-        };
+                }),
+                transform,
+                ..default()
+            })
+            .insert(Rotate(-0.01));
+    };
 
-    let spawn_3 =
-        |transform, commands: &mut Commands, materials: &mut ResMut<Assets<StandardMaterial>>| {
-            commands
-                .spawn(PbrBundle {
-                    mesh: asset_server.load("sweeper_objects.gltf#Mesh0/Primitive0"),
-                    material: materials.add(StandardMaterial {
-                        base_color: Color::RED,
-                        ..default()
-                    }),
-                    transform,
+    let spawn_4 = |transform: Transform,
+                   commands: &mut Commands,
+                   materials: &mut ResMut<Assets<StandardMaterial>>| {
+        commands
+            .spawn(PbrBundle {
+                mesh: asset_server.load("sweeper_objects.gltf#Mesh1/Primitive0"),
+                material: materials.add(StandardMaterial {
+                    base_color: Color::ORANGE,
                     ..default()
-                })
-                .insert(Rotate(-0.01));
-        };
-
-    let spawn_4 =
-        |transform, commands: &mut Commands, materials: &mut ResMut<Assets<StandardMaterial>>| {
-            commands
-                .spawn(PbrBundle {
-                    mesh: asset_server.load("sweeper_objects.gltf#Mesh1/Primitive0"),
-                    material: materials.add(StandardMaterial {
-                        base_color: Color::ORANGE,
-                        ..default()
-                    }),
-                    transform,
-                    ..default()
-                })
-                .insert(Rotate(-0.01));
-        };
+                }),
+                transform,
+                ..default()
+            })
+            .insert(Rotate(-0.01));
+    };
 
     let spawn_ring = |transform: Transform,
                       commands: &mut Commands,
@@ -164,11 +171,7 @@ fn setup(
     let spawn_5 = |transform: Transform,
                    commands: &mut Commands,
                    materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_1(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_1(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
     };
 
@@ -238,44 +241,28 @@ fn setup(
     let spawn_6 = |transform: Transform,
                    commands: &mut Commands,
                    materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_1(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_1(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit1(transform, commands, materials);
     };
     let spawn_7 = |transform: Transform,
                    commands: &mut Commands,
                    materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_1(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_1(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit2(transform, commands, materials);
     };
     let spawn_8 = |transform: Transform,
                    commands: &mut Commands,
                    materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_1(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_1(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit3(transform, commands, materials);
     };
     let spawn_9 = |transform: Transform,
                    commands: &mut Commands,
                    materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_1(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_1(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit4(transform, commands, materials);
     };
@@ -283,54 +270,34 @@ fn setup(
     let spawn_10 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_2(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_2(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
     };
     let spawn_11 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_2(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_2(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit1(transform, commands, materials);
     };
     let spawn_12 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_2(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_2(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit2(transform, commands, materials);
     };
     let spawn_13 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_2(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_2(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit3(transform, commands, materials);
     };
     let spawn_14 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_2(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_2(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit4(transform, commands, materials);
     };
@@ -338,54 +305,34 @@ fn setup(
     let spawn_15 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_3(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_3(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
     };
     let spawn_16 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_3(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_3(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit1(transform, commands, materials);
     };
     let spawn_17 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_3(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_3(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit2(transform, commands, materials);
     };
     let spawn_18 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_3(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_3(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit3(transform, commands, materials);
     };
     let spawn_19 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_3(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_3(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit4(transform, commands, materials);
     };
@@ -393,54 +340,34 @@ fn setup(
     let spawn_20 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_4(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_4(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
     };
     let spawn_21 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_4(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_4(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit1(transform, commands, materials);
     };
     let spawn_22 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_4(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_4(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit2(transform, commands, materials);
     };
     let spawn_23 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_4(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_4(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit3(transform, commands, materials);
     };
     let spawn_24 = |transform: Transform,
                     commands: &mut Commands,
                     materials: &mut ResMut<Assets<StandardMaterial>>| {
-        spawn_4(
-            transform.with_scale(Vec3::new(1.5, 1.5, 1.5)),
-            commands,
-            materials,
-        );
+        spawn_4(transform.with_scale(LARGE_SCALE), commands, materials);
         spawn_ring(transform, commands, materials);
         spawn_orbit4(transform, commands, materials);
     };
@@ -456,22 +383,22 @@ fn setup(
         &mut materials,
     );
     spawn_1(
-        Transform::from_xyz(0.0, 0.0, 0.0),
+        Transform::from_xyz(0.0, 0.0, 0.0).with_scale(SMALL_SCALE),
         &mut commands,
         &mut materials,
     );
     spawn_2(
-        Transform::from_xyz(1.0, 0.0, 0.0),
+        Transform::from_xyz(1.0, 0.0, 0.0).with_scale(SMALL_SCALE),
         &mut commands,
         &mut materials,
     );
     spawn_3(
-        Transform::from_xyz(2.0, 0.0, 0.0),
+        Transform::from_xyz(2.0, 0.0, 0.0).with_scale(SMALL_SCALE),
         &mut commands,
         &mut materials,
     );
     spawn_4(
-        Transform::from_xyz(3.0, 0.0, 0.0),
+        Transform::from_xyz(3.0, 0.0, 0.0).with_scale(SMALL_SCALE),
         &mut commands,
         &mut materials,
     );
