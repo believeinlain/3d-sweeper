@@ -180,9 +180,9 @@ pub(super) fn handle_field_events(
                     continue;
                 };
                 cell.revealed = true;
-                if matches!(game_state.get(), GameState::Start) {
+                if matches!(game_state.get(), GameState::GameStart) {
                     debug!("Transition to GameState::Playing");
-                    next_state.set(GameState::Playing);
+                    next_state.set(GameState::GamePlaying);
                     field.initialize(&blocks);
                 }
                 // Get the updated field
@@ -199,7 +199,7 @@ pub(super) fn handle_field_events(
                 if field.fully_revealed() {
                     info!("Victory!");
                     debug!("Transition to GameState::Ended");
-                    next_state.set(GameState::Ended);
+                    next_state.set(GameState::GameOver);
                 }
             }
         }

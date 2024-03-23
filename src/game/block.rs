@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use super::minefield::{Contains, FieldEvent};
 use super::RayEvent;
 use super::{GameComponent, GameState};
-use crate::Settings;
+use crate::{GameAssets, Settings};
 
 #[derive(Component)]
 pub struct Block {
@@ -35,14 +35,12 @@ impl Block {
 
 #[derive(Resource)]
 pub(super) struct BlockAssets {
-    hidden_mesh: Handle<Mesh>,
     reveal_sound: Handle<AudioSource>,
     revealed_1_mesh: Handle<Mesh>,
     revealed_2_mesh: Handle<Mesh>,
     revealed_3_mesh: Handle<Mesh>,
     revealed_4_mesh: Handle<Mesh>,
     revealed_5_mesh: Handle<Mesh>,
-    mine_mesh: Handle<Mesh>,
     hidden_mat: Handle<StandardMaterial>,
     marked_mat: Handle<StandardMaterial>,
     revealed_1_mat: Handle<StandardMaterial>,
@@ -69,14 +67,12 @@ pub(super) fn initialize(
     asset_server: Res<AssetServer>,
 ) {
     commands.insert_resource(BlockAssets {
-        hidden_mesh: asset_server.load("block_01.gltf#Mesh0/Primitive0"),
         reveal_sound: asset_server.load("pop2.ogg"),
         revealed_1_mesh: meshes.add(Sphere::new(0.1).mesh().ico(4).unwrap()),
         revealed_2_mesh: meshes.add(Sphere::new(0.15).mesh().ico(4).unwrap()),
         revealed_3_mesh: meshes.add(Sphere::new(0.2).mesh().ico(4).unwrap()),
         revealed_4_mesh: meshes.add(Sphere::new(0.25).mesh().ico(4).unwrap()),
         revealed_5_mesh: meshes.add(Sphere::new(0.275).mesh().ico(4).unwrap()),
-        mine_mesh: meshes.add(Sphere::new(0.5).mesh().ico(4).unwrap()),
         hidden_mat: materials.add(StandardMaterial {
             base_color_texture: Some(asset_server.load("concrete_02_albedo.png")),
             metallic_roughness_texture: Some(asset_server.load("concrete_02_orm.png")),
@@ -121,6 +117,7 @@ pub(super) fn setup(
     settings: Res<Settings>,
     mut commands: Commands,
     block_assets: Res<BlockAssets>,
+    game_assets: Res<GameAssets>,
 ) {
     let cube = Cuboid::new(1.0, 1.0, 1.0);
 
@@ -130,7 +127,7 @@ pub(super) fn setup(
         commands
             .spawn((
                 PbrBundle {
-                    mesh: block_assets.hidden_mesh.clone(),
+                    mesh: game_assets.sweeper_objects.resource().block_merged.clone(),
                     material: block_assets.hidden_mat.clone(),
                     transform,
                     ..default()
@@ -226,6 +223,7 @@ pub(super) fn handle_block_events(
     mut block_events: EventReader<BlockEvent>,
     mut blocks: Query<&mut Block>,
     block_assets: Res<BlockAssets>,
+    game_assets: Res<GameAssets>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     let mut any_blocks_cleared = false;
@@ -251,9 +249,9 @@ pub(super) fn handle_block_events(
                     Contains::Mine => {
                         commands
                             .entity(*entity)
-                            .insert(block_assets.mine_mesh.clone())
+                            .insert(game_assets.sweeper_objects.resource().mine_merged.clone())
                             .insert(block_assets.mine_mat.clone());
-                        next_state.set(GameState::Ended);
+                        next_state.set(GameState::GameOver);
                     }
                     Contains::Empty { adjacent_mines } => match adjacent_mines {
                         0 => {}

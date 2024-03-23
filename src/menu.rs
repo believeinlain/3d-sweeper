@@ -4,38 +4,20 @@ use bevy_egui::{
     EguiContexts, EguiPlugin,
 };
 
-use crate::{game::GameState, settings::Safety, GlobalState, Settings};
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
-pub enum MenuState {
-    /// Main menu
-    #[default]
-    Main,
-    /// Custom game menu
-    Custom,
-    /// Settings menu
-    Settings,
-}
+use crate::{settings::Safety, GameState, Settings};
 
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<MenuState>()
-            .add_plugins(EguiPlugin)
-            .add_systems(
-                Update,
-                (
-                    display_main_menu
-                        .run_if(in_state(GlobalState::Menu).and_then(in_state(MenuState::Main))),
-                    display_custom_menu
-                        .run_if(in_state(GlobalState::Menu).and_then(in_state(MenuState::Custom))),
-                    display_settings_menu.run_if(
-                        in_state(GlobalState::Menu).and_then(in_state(MenuState::Settings)),
-                    ),
-                    display_game_over
-                        .run_if(in_state(GlobalState::Game).and_then(in_state(GameState::Ended))),
-                ),
-            );
+        app.add_plugins(EguiPlugin).add_systems(
+            Update,
+            (
+                display_main_menu.run_if(in_state(GameState::MenuMain)),
+                display_custom_menu.run_if(in_state(GameState::MenuCustom)),
+                display_settings_menu.run_if(in_state(GameState::MenuSettings)),
+                display_game_over.run_if(in_state(GameState::GameOver)),
+            ),
+        );
     }
 }
 
@@ -70,9 +52,7 @@ fn create_menu_window<'a>(title: impl Into<egui::WidgetText>) -> egui::Window<'a
 fn display_main_menu(
     mut contexts: EguiContexts,
     mut settings: ResMut<Settings>,
-    mut next_global_state: ResMut<NextState<GlobalState>>,
-    mut next_menu_state: ResMut<NextState<MenuState>>,
-    mut next_game_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<GameState>>,
     mut exit_events: EventWriter<AppExit>,
 ) {
     let ctx = contexts.ctx_mut();
@@ -83,26 +63,23 @@ fn display_main_menu(
                 ui.horizontal_centered(|ui| {
                     if ui.add(egui::Button::new("Small")).clicked() {
                         settings.set_if_neq(Settings::small());
-                        next_game_state.set(GameState::Start);
-                        next_global_state.set(GlobalState::Game);
+                        next_state.set(GameState::GameStart);
                     }
                     if ui.add(egui::Button::new("Medium")).clicked() {
                         settings.set_if_neq(Settings::medium());
-                        next_game_state.set(GameState::Start);
-                        next_global_state.set(GlobalState::Game);
+                        next_state.set(GameState::GameStart);
                     }
                     if ui.add(egui::Button::new("Large")).clicked() {
                         settings.set_if_neq(Settings::large());
-                        next_game_state.set(GameState::Start);
-                        next_global_state.set(GlobalState::Game);
+                        next_state.set(GameState::GameStart);
                     }
                     if ui.add(egui::Button::new("Custom")).clicked() {
                         settings.set_if_neq(Settings::default());
-                        next_menu_state.set(MenuState::Custom);
+                        next_state.set(GameState::MenuCustom);
                     }
                 });
                 if ui.add(egui::Button::new("Settings")).clicked() {
-                    next_menu_state.set(MenuState::Settings);
+                    next_state.set(GameState::MenuSettings);
                 }
                 if ui.add(egui::Button::new("Quit")).clicked() {
                     exit_events.send(AppExit);
@@ -115,9 +92,7 @@ fn display_main_menu(
 fn display_custom_menu(
     mut contexts: EguiContexts,
     mut settings: ResMut<Settings>,
-    mut next_global_state: ResMut<NextState<GlobalState>>,
-    mut next_menu_state: ResMut<NextState<MenuState>>,
-    mut next_game_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     let (field_size, mine_density, _) = settings.fields_mut();
     let ctx = contexts.ctx_mut();
@@ -141,11 +116,10 @@ fn display_custom_menu(
                 });
                 ui.horizontal_centered(|ui| {
                     if ui.add(egui::Button::new("Start")).clicked() {
-                        next_game_state.set(GameState::Start);
-                        next_global_state.set(GlobalState::Game);
+                        next_state.set(GameState::GameStart);
                     }
                     if ui.add(egui::Button::new("Back")).clicked() {
-                        next_menu_state.set(MenuState::Main);
+                        next_state.set(GameState::MenuMain);
                     }
                 });
             });
@@ -156,7 +130,7 @@ fn display_custom_menu(
 fn display_settings_menu(
     mut contexts: EguiContexts,
     mut settings: ResMut<Settings>,
-    mut next_menu_state: ResMut<NextState<MenuState>>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     let (_, _, safety) = settings.fields_mut();
     let ctx = contexts.ctx_mut();
@@ -182,7 +156,7 @@ fn display_settings_menu(
                 });
                 ui.horizontal_centered(|ui| {
                     if ui.add(egui::Button::new("Back")).clicked() {
-                        next_menu_state.set(MenuState::Main);
+                        next_state.set(GameState::MenuMain);
                     }
                 });
             });
@@ -192,9 +166,7 @@ fn display_settings_menu(
 
 fn display_game_over(
     mut contexts: EguiContexts,
-    mut next_global_state: ResMut<NextState<GlobalState>>,
-    mut next_menu_state: ResMut<NextState<MenuState>>,
-    mut next_game_state: ResMut<NextState<GameState>>,
+    mut next_state: ResMut<NextState<GameState>>,
     mut exit_events: EventWriter<AppExit>,
 ) {
     let ctx = contexts.ctx_mut();
@@ -209,12 +181,10 @@ fn display_game_over(
                 ui.vertical_centered(|ui| {
                     ui.horizontal_centered(|ui| {
                         if ui.add(egui::Button::new("Restart")).clicked() {
-                            next_game_state.set(GameState::Start);
-                            next_global_state.set(GlobalState::Game);
+                            next_state.set(GameState::GameStart);
                         }
                         if ui.add(egui::Button::new("Main Menu")).clicked() {
-                            next_menu_state.set(MenuState::Main);
-                            next_global_state.set(GlobalState::Menu);
+                            next_state.set(GameState::MenuMain);
                         }
                         if ui.add(egui::Button::new("Quit")).clicked() {
                             exit_events.send(AppExit);

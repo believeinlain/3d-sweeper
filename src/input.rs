@@ -1,11 +1,9 @@
-use bevy::{
-    input::{
-        keyboard::KeyboardInput,
-        mouse::{MouseButtonInput, MouseMotion, MouseWheel},
-    },
-    prelude::*,
-    window::PrimaryWindow,
+use bevy::input::{
+    keyboard::KeyboardInput,
+    mouse::{MouseButtonInput, MouseMotion, MouseWheel},
 };
+use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 
 pub struct InputPlugin;
 impl Plugin for InputPlugin {

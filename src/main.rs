@@ -2,35 +2,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy::{log::LogPlugin, prelude::*, window::WindowResolution};
-
-mod game;
-mod input;
-mod menu;
-mod settings;
-
-use game::GamePlugin;
-use input::InputPlugin;
-use menu::MenuPlugin;
-use settings::SettingsPlugin;
-
-pub use input::InputEvent;
-pub use settings::Settings;
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
-pub enum GlobalState {
-    #[default]
-    Menu,
-    Game,
-}
+use sweeper_3d::{GamePlugin, GameState, InputPlugin, LoaderPlugin, MenuPlugin, SettingsPlugin};
 
 fn main() {
     App::new()
-        .init_state::<GlobalState>()
+        .init_state::<GameState>()
         .add_plugins(
             DefaultPlugins
                 // Window settings
                 .set(WindowPlugin {
                     primary_window: Some(Window {
+                        // Show the window only once internal startup has finished and we're running systems
                         visible: false,
                         resolution: WindowResolution::new(1024.0, 768.0),
                         title: "3D Sweeper".to_string(),
@@ -47,12 +29,17 @@ fn main() {
                 .set(ImagePlugin::default_nearest()),
         )
         .add_systems(Startup, setup)
-        .add_plugins((MenuPlugin, SettingsPlugin, GamePlugin, InputPlugin))
+        .add_plugins((
+            MenuPlugin,
+            SettingsPlugin,
+            GamePlugin,
+            InputPlugin,
+            LoaderPlugin,
+        ))
         .run();
 }
 
-fn setup(mut commands: Commands, mut window: Query<&mut Window>) {
-    window.single_mut().visible = true;
+fn setup(mut commands: Commands) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 1200.0,
