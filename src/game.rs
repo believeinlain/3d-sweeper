@@ -21,15 +21,30 @@ pub struct GamePiece;
 pub struct GamePlugin;
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<GameResult>();
         app.add_systems(OnEnter(GameState::GameStart), cleanup);
         app.add_plugins((BlockPlugin, CameraPlugin, FieldPlugin));
     }
 }
 
-pub fn cleanup(to_despawn: Query<Entity, With<GamePiece>>, mut commands: Commands) {
+pub fn cleanup(
+    to_despawn: Query<Entity, With<GamePiece>>,
+    mut commands: Commands,
+    mut result: ResMut<GameResult>,
+) {
     for entity in &to_despawn {
         commands.entity(entity).despawn_recursive();
     }
+    *result = GameResult::default();
+}
+
+/// When the game ends, what was the result?
+#[derive(Default, Resource)]
+pub enum GameResult {
+    #[default]
+    Unfinished,
+    Victory,
+    Failure,
 }
 
 // TAB - step away ______ -> asfgrdsgg

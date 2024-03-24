@@ -4,8 +4,8 @@ use bevy::prelude::*;
 
 use super::camera::RayEvent;
 use super::minefield::{Contains, FieldEvent};
-use super::{GamePiece, GameState};
-use crate::{GameAssets, Settings};
+use super::{GamePiece, GameResult, GameState};
+use crate::{FieldSettings, GameAssets};
 
 pub struct BlockPlugin;
 impl Plugin for BlockPlugin {
@@ -227,7 +227,7 @@ pub(super) fn create_materials(
 
 /// Setup to be run when the game is started
 pub(super) fn setup(
-    settings: Res<Settings>,
+    field_settings: Res<FieldSettings>,
     mut commands: Commands,
     block_mat: Res<BlockMaterials>,
     game_assets: Res<GameAssets>,
@@ -251,7 +251,7 @@ pub(super) fn setup(
         field_events.send(FieldEvent::SpawnBlock(block, index));
     };
 
-    let field_size = settings.field_size;
+    let field_size = field_settings.field_size;
     for i in 0..field_size[0] {
         for j in 0..field_size[1] {
             for k in 0..field_size[2] {
@@ -322,6 +322,7 @@ pub(super) fn handle_block_events(
     block_mat: Res<BlockMaterials>,
     game_assets: Res<GameAssets>,
     mut next_state: ResMut<NextState<GameState>>,
+    mut game_result: ResMut<GameResult>,
 ) {
     let mut any_blocks_cleared = false;
     for event in block_events.read() {
@@ -346,6 +347,7 @@ pub(super) fn handle_block_events(
                             *entity,
                             &mut commands,
                         );
+                        *game_result = GameResult::Failure;
                         next_state.set(GameState::GameOver);
                     }
                     Contains::Empty { adjacent_mines } => BlockDisplay::Revealed { adjacent_mines }
@@ -353,6 +355,7 @@ pub(super) fn handle_block_events(
                 }
             }
             BlockEvent::EndReveal(entity, contains) => {
+                // TODO: maybe on EndReveal we can maintain a wireframe of the blocks that weren't clicked?
                 debug!("Revealed block {entity:?} at end of game");
                 match *contains {
                     Contains::Mine if block.revealed.is_some() => {

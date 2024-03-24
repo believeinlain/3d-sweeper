@@ -4,7 +4,7 @@ use bevy_egui::{
     EguiContexts, EguiPlugin,
 };
 
-use crate::{settings::Safety, GameState, Settings};
+use crate::{game::GameResult, FieldSettings, GameSettings, GameState, Safety};
 
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
@@ -51,7 +51,7 @@ fn create_menu_window<'a>(title: impl Into<egui::WidgetText>) -> egui::Window<'a
 
 fn display_main_menu(
     mut contexts: EguiContexts,
-    mut settings: ResMut<Settings>,
+    mut field_settings: ResMut<FieldSettings>,
     mut next_state: ResMut<NextState<GameState>>,
     mut exit_events: EventWriter<AppExit>,
 ) {
@@ -62,19 +62,19 @@ fn display_main_menu(
             ui.vertical_centered(|ui| {
                 ui.horizontal_centered(|ui| {
                     if ui.add(egui::Button::new("Small")).clicked() {
-                        settings.set_if_neq(Settings::small());
+                        field_settings.set_if_neq(FieldSettings::small());
                         next_state.set(GameState::GameStart);
                     }
                     if ui.add(egui::Button::new("Medium")).clicked() {
-                        settings.set_if_neq(Settings::medium());
+                        field_settings.set_if_neq(FieldSettings::medium());
                         next_state.set(GameState::GameStart);
                     }
                     if ui.add(egui::Button::new("Large")).clicked() {
-                        settings.set_if_neq(Settings::large());
+                        field_settings.set_if_neq(FieldSettings::large());
                         next_state.set(GameState::GameStart);
                     }
                     if ui.add(egui::Button::new("Custom")).clicked() {
-                        settings.set_if_neq(Settings::default());
+                        field_settings.set_if_neq(FieldSettings::default());
                         next_state.set(GameState::MenuCustom);
                     }
                 });
@@ -91,10 +91,10 @@ fn display_main_menu(
 
 fn display_custom_menu(
     mut contexts: EguiContexts,
-    mut settings: ResMut<Settings>,
+    mut field_settings: ResMut<FieldSettings>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
-    let (field_size, mine_density, _) = settings.fields_mut();
+    let (field_size, mine_density) = field_settings.fields_mut();
     let ctx = contexts.ctx_mut();
     global_settings(ctx);
     create_menu_window("Custom Game").show(ctx, |ui| {
@@ -129,10 +129,10 @@ fn display_custom_menu(
 
 fn display_settings_menu(
     mut contexts: EguiContexts,
-    mut settings: ResMut<Settings>,
+    mut game_settings: ResMut<GameSettings>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
-    let (_, _, safety) = settings.fields_mut();
+    let safety = &mut game_settings.safety;
     let ctx = contexts.ctx_mut();
     global_settings(ctx);
     create_menu_window("Settings").show(ctx, |ui| {
@@ -140,17 +140,17 @@ fn display_settings_menu(
             ui.vertical_centered(|ui| {
                 ui.horizontal_centered(|ui| {
                     ui.label("First Block Safety:");
-                    ui.radio_value(safety, Safety::Safe, "Guaranteed Safe")
-                        .on_hover_text_at_pointer(concat!(
+                    ui.radio_value(safety, Safety::Clear, "Clear")
+                        .on_hover_text(
+                            "The first block cleared is guaranteed to reveal more than one space.",
+                        );
+                    ui.radio_value(safety, Safety::Safe, "Safe")
+                        .on_hover_text(concat!(
                             "The first block cleared is guaranteed to be safe, ",
                             "but may only reveal one space."
                         ));
-                    ui.radio_value(safety, Safety::Clear, "Guaranteed Clear")
-                        .on_hover_text_at_pointer(
-                            "The first block cleared is guaranteed to reveal more than one space.",
-                        );
                     ui.radio_value(safety, Safety::Random, "Random")
-                        .on_hover_text_at_pointer(
+                        .on_hover_text(
                             "No safety guarantees - the first block cleared might contain a mine.",
                         );
                 });
@@ -168,29 +168,37 @@ fn display_game_over(
     mut contexts: EguiContexts,
     mut next_state: ResMut<NextState<GameState>>,
     mut exit_events: EventWriter<AppExit>,
+    game_result: Res<GameResult>,
 ) {
     let ctx = contexts.ctx_mut();
     global_settings(ctx);
-    egui::Window::new("Game Over")
-        .anchor(Align2::CENTER_BOTTOM, [0.0, 0.0])
-        .collapsible(false)
-        .movable(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            ui.allocate_ui(egui::Vec2::new(0.0, 0.0), |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.horizontal_centered(|ui| {
-                        if ui.add(egui::Button::new("Restart")).clicked() {
-                            next_state.set(GameState::GameStart);
-                        }
-                        if ui.add(egui::Button::new("Main Menu")).clicked() {
-                            next_state.set(GameState::MenuMain);
-                        }
-                        if ui.add(egui::Button::new("Quit")).clicked() {
-                            exit_events.send(AppExit);
-                        }
-                    });
+    egui::Window::new(match *game_result {
+        GameResult::Unfinished => {
+            error!("Should not be displaying game over menu when GameResult::Unfinished");
+            "Game Over"
+        }
+        GameResult::Failure => "Game Over",
+        GameResult::Victory => "Victory!",
+    })
+    .anchor(Align2::CENTER_BOTTOM, [0.0, 0.0])
+    .collapsible(false)
+    .movable(false)
+    .resizable(false)
+    .show(ctx, |ui| {
+        ui.allocate_ui(egui::Vec2::new(0.0, 0.0), |ui| {
+            ui.vertical_centered(|ui| {
+                ui.horizontal_centered(|ui| {
+                    if ui.add(egui::Button::new("Restart")).clicked() {
+                        next_state.set(GameState::GameStart);
+                    }
+                    if ui.add(egui::Button::new("Main Menu")).clicked() {
+                        next_state.set(GameState::MenuMain);
+                    }
+                    if ui.add(egui::Button::new("Quit")).clicked() {
+                        exit_events.send(AppExit);
+                    }
                 });
             });
         });
+    });
 }

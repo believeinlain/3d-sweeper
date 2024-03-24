@@ -8,7 +8,7 @@ mod settings;
 
 pub use input::InputEvent;
 pub use loader::GameAssets;
-pub use settings::Settings;
+pub use settings::{FieldSettings, GameSettings, Safety};
 
 pub use game::GamePlugin;
 pub use input::InputPlugin;

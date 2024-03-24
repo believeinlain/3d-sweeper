@@ -1,6 +1,6 @@
 [package]
 name = "sweeper-3d"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 
 [dependencies]
@@ -20,7 +20,7 @@ bevy = { version = "0.13", default-features = false, features = [
     "tonemapping_luts",
     "default_font",
 ] }
-bevy_egui = "0.25"
+bevy_egui = "0.26"
 egui_extras = { version = "0.26", features = ["svg"] }
 ndarray = "0.15"
 rand = "0.8"

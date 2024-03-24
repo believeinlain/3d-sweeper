@@ -1,12 +1,14 @@
+use std::fmt::Display;
+
 use bevy::prelude::*;
 use ndarray::prelude::*;
 use rand::prelude::*;
 
 use super::{
     block::{Block, BlockEvent},
-    GamePiece, GameState,
+    GamePiece, GameResult, GameState,
 };
-use crate::Settings;
+use crate::{FieldSettings, GameSettings, Safety};
 
 pub struct FieldPlugin;
 impl Plugin for FieldPlugin {
@@ -48,27 +50,101 @@ impl Default for Contains {
     }
 }
 
+#[derive(Debug, Deref, Clone, Copy, PartialEq, Eq)]
+pub struct FieldIndex((usize, usize, usize));
+impl From<&(usize, usize, usize)> for FieldIndex {
+    #[inline]
+    fn from((i, j, k): &(usize, usize, usize)) -> Self {
+        Self((*i, *j, *k))
+    }
+}
+impl From<(usize, usize, usize)> for FieldIndex {
+    #[inline]
+    fn from(value: (usize, usize, usize)) -> Self {
+        Self(value)
+    }
+}
+impl From<[usize; 3]> for FieldIndex {
+    #[inline]
+    fn from(value: [usize; 3]) -> Self {
+        Self((value[0], value[1], value[2]))
+    }
+}
+impl From<&[usize; 3]> for FieldIndex {
+    #[inline]
+    fn from(value: &[usize; 3]) -> Self {
+        Self((value[0], value[1], value[2]))
+    }
+}
+impl Display for FieldIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let FieldIndex((i, j, k)) = self;
+        write!(f, "({i}, {j}, {k})")
+    }
+}
+
 #[derive(Component)]
 pub struct Minefield {
     cells: Array3<Cell>,
     density: f64,
+    safety: Safety,
 }
 impl Minefield {
     /// Initialize the [Minefield], placing mines randomly according to [Minefield::density].
-    fn initialize(&mut self, blocks: &Query<(Entity, &Block)>) {
-        debug!("Creating minefield");
-        let mut rng = rand::thread_rng();
+    fn initialize(&mut self, blocks: &Query<(Entity, &Block)>, click_location: FieldIndex) {
         // Save Block ids
         for (entity, block) in blocks {
             self.cells[block.index()].block = Some(entity)
         }
+        info!("Creating minefield");
+        let mut rng = rand::thread_rng();
+        let num_blocks = self.cells.iter().count();
+        let num_mines = (num_blocks as f64 * self.density) as usize;
+        debug!(
+            "Density {} => num_mines = {}/{}",
+            self.density, num_mines, num_blocks
+        );
+        // Determine safe cells based on safety and click location
+        let safe_cells = match self.safety {
+            Safety::Random => vec![],
+            Safety::Safe => vec![click_location],
+            Safety::Clear => {
+                let mut safe = vec![click_location];
+                self.foreach_adjacent(click_location, |adj_index| {
+                    safe.push(adj_index);
+                });
+                safe
+            }
+        };
+        // Sort remaining potential mine locations in random order
+        let mut random_cells: Vec<_> = self
+            .cells
+            .indexed_iter()
+            .map(|(i, _)| i.into())
+            .filter(|i| {
+                let safe = safe_cells.contains(i);
+                if safe {
+                    debug!("Ignoring safe cell {i}");
+                }
+                !safe
+            })
+            .collect();
+        random_cells.shuffle(&mut rng);
         // Place mines
-        for (index, cell) in self.cells.indexed_iter_mut() {
-            if cell.revealed {
-                // TODO: implement FirstClickSafety setting
-                debug!("Cell at {index:?} already revealed, will not place mine there");
-            } else if rng.gen_bool(self.density) {
-                cell.contains = Contains::Mine;
+        let mut mines_to_place = num_mines;
+        let num_cells = random_cells.len();
+        // Place mines randomly until there is exactly as many cells left as mines,
+        // then just fill the rest.
+        // Because we're iterating in random order, this will be fine.
+        // Not guaranteed to place exactly num_mines mines; we prioritize the safety setting.
+        for (n, index) in random_cells.into_iter().enumerate() {
+            if mines_to_place == 0 {
+                break;
+            }
+            let cells_remaining = num_cells - n;
+            if cells_remaining <= mines_to_place || rng.gen_bool(self.density) {
+                self.cells[*index].contains = Contains::Mine;
+                mines_to_place -= 1;
             }
         }
         // Determine adjacent value in each cell
@@ -108,6 +184,33 @@ impl Minefield {
                         }
                         increment_adjacent(i_off, j_off, k_off);
                     }
+                }
+            }
+        }
+    }
+    fn foreach_adjacent<F>(&self, index: impl Into<FieldIndex>, mut f: F)
+    where
+        F: FnMut(FieldIndex),
+    {
+        let (i, j, k) = *index.into();
+        for i_off in -1..=1 {
+            for j_off in -1..=1 {
+                for k_off in -1..=1 {
+                    // The block at index is not adjacent to itself
+                    if i_off == 0 && j_off == 0 && k_off == 0 {
+                        continue;
+                    }
+                    // Get a block adjacent to index
+                    let adj_index = (
+                        i.wrapping_add_signed(i_off),
+                        j.wrapping_add_signed(j_off),
+                        k.wrapping_add_signed(k_off),
+                    );
+                    // Make sure we have a valid adj_index
+                    if self.cells.get(adj_index).is_none() {
+                        continue;
+                    };
+                    f(adj_index.into());
                 }
             }
         }
@@ -173,10 +276,15 @@ impl Minefield {
     }
 }
 
-fn spawn(settings: Res<Settings>, mut commands: Commands) {
+fn spawn(
+    game_settings: Res<GameSettings>,
+    field_settings: Res<FieldSettings>,
+    mut commands: Commands,
+) {
     let field = Minefield {
-        cells: Array3::default(settings.field_size),
-        density: settings.mine_density.into(),
+        cells: Array3::default(field_settings.field_size),
+        density: field_settings.mine_density.into(),
+        safety: game_settings.safety,
     };
     commands.spawn((field, GamePiece));
 }
@@ -184,6 +292,7 @@ fn spawn(settings: Res<Settings>, mut commands: Commands) {
 pub(super) fn handle_field_events(
     game_state: Res<State<GameState>>,
     mut next_state: ResMut<NextState<GameState>>,
+    mut game_result: ResMut<GameResult>,
     blocks: Query<(Entity, &Block)>,
     mut field: Query<&mut Minefield>,
     mut field_events: EventReader<FieldEvent>,
@@ -207,7 +316,7 @@ pub(super) fn handle_field_events(
                 if matches!(game_state.get(), GameState::GameStart) {
                     debug!("Transition to GameState::Playing");
                     next_state.set(GameState::GamePlaying);
-                    field.initialize(&blocks);
+                    field.initialize(&blocks, index.into());
                 }
                 // Get the updated field
                 let Some(cell) = field.cells.get_mut(*index) else {
@@ -223,6 +332,7 @@ pub(super) fn handle_field_events(
                 if field.fully_revealed() {
                     info!("Victory!");
                     debug!("Transition to GameState::Ended");
+                    *game_result = GameResult::Victory;
                     next_state.set(GameState::GameOver);
                 }
             }
