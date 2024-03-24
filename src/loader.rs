@@ -17,14 +17,19 @@ impl Plugin for LoaderPlugin {
     }
 }
 
-#[derive(Resource, Default, Deref, DerefMut)]
+#[derive(Resource, Default)]
 pub struct GameAssets {
     pub sweeper_objects: Loadable<SweeperObjects, Gltf>,
+    pub pop1: Handle<AudioSource>,
+    pub pop2: Handle<AudioSource>,
+    pub pop3: Handle<AudioSource>,
+    pub concrete_02_albedo: Handle<Image>,
+    pub concrete_02_normal: Handle<Image>,
+    pub concrete_02_orm: Handle<Image>,
 }
 impl GameAssets {
     fn all_loaded(&self) -> bool {
-        let Self { sweeper_objects } = self;
-        sweeper_objects.is_loaded()
+        self.sweeper_objects.is_loaded()
     }
 }
 
@@ -65,7 +70,7 @@ where
 {
     /// # Panics
     /// Panics if the resource is not fully loaded.
-    pub fn resource(&self) -> &T {
+    pub fn unwrap(&self) -> &T {
         match self {
             Loadable::Init => panic!("Resource not loaded: Asset not initialized"),
             Loadable::Loading(asset) => {
@@ -92,9 +97,26 @@ where
     }
 }
 
-fn load_assets(mut game_assets: ResMut<GameAssets>, asset_server: Res<AssetServer>) {
+fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
     info!("Loading sweeper_objects");
-    game_assets.sweeper_objects = Loadable::from(asset_server.load("sweeper_objects.gltf"));
+    let sweeper_objects = Loadable::from(asset_server.load("sweeper_objects.gltf"));
+    info!("Loading sound effects");
+    let pop1 = asset_server.load("pop1.ogg");
+    let pop2 = asset_server.load("pop2.ogg");
+    let pop3 = asset_server.load("pop3.ogg");
+    info!("Loading textures");
+    let concrete_02_albedo = asset_server.load("concrete_02_albedo.png");
+    let concrete_02_normal = asset_server.load("concrete_02_normal.png");
+    let concrete_02_orm = asset_server.load("concrete_02_orm.png");
+    commands.insert_resource(GameAssets {
+        sweeper_objects,
+        pop1,
+        pop2,
+        pop3,
+        concrete_02_albedo,
+        concrete_02_normal,
+        concrete_02_orm,
+    });
 }
 
 fn update(
@@ -107,7 +129,7 @@ fn update(
 ) {
     if game_assets.all_loaded() {
         // Hold so we can see the splash screen
-        if time.elapsed_seconds() >= 2.0 {
+        if time.elapsed_seconds() >= 1.0 {
             info!("All assets loaded");
             next_state.set(GameState::MenuMain);
         }
@@ -125,7 +147,7 @@ fn update(
             };
             let block_merged = get_mesh("BlockMerged");
             let mine_merged = get_mesh("MineMerged");
-            let ring = get_mesh("Ring.001");
+            let ring = get_mesh("Ring");
             let single1 = get_mesh("Single1");
             let single2 = get_mesh("Single2");
             let single3 = get_mesh("Single3");

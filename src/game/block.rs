@@ -2,10 +2,34 @@ use bevy::audio::PlaybackMode;
 use bevy::math::bounding::{Aabb3d, Bounded3d, RayCast3d};
 use bevy::prelude::*;
 
+use super::camera::RayEvent;
 use super::minefield::{Contains, FieldEvent};
-use super::RayEvent;
-use super::{GameComponent, GameState};
+use super::{GamePiece, GameState};
 use crate::{GameAssets, Settings};
+
+pub struct BlockPlugin;
+impl Plugin for BlockPlugin {
+    fn build(&self, app: &mut App) {
+        // Add Block systems
+        app.add_systems(Startup, create_materials);
+        app.add_systems(OnEnter(GameState::GameStart), setup.after(super::cleanup));
+        app.add_systems(
+            Update,
+            handle_ray_events
+                .after(super::camera::camera_controls)
+                .run_if(GameState::playable()),
+        );
+        app.add_systems(
+            Update,
+            handle_block_events
+                .after(super::minefield::handle_field_events)
+                .run_if(GameState::in_game()),
+        );
+        app.add_event::<BlockEvent>();
+        #[cfg(feature = "debug-draw")]
+        app.add_systems(Update, block_gizmos.run_if(GameState::playable()));
+    }
+}
 
 #[derive(Component)]
 pub struct Block {
@@ -33,22 +57,139 @@ impl Block {
     }
 }
 
+#[derive(Debug, Event)]
+pub enum BlockEvent {
+    /// Uncover a block, detonating any contained mines.
+    /// Received from the Minefield enitity after checking its contents.
+    Clear(Entity, Contains),
+    /// Mark a block (or unmark if already marked) as containing a mine.
+    Mark(Entity),
+    /// Show the contents of a block after the game has ended.
+    EndReveal(Entity, Contains),
+}
+impl BlockEvent {
+    pub fn block_id(&self) -> Entity {
+        match self {
+            Self::Clear(e, _) | Self::Mark(e) | Self::EndReveal(e, _) => *e,
+        }
+    }
+}
+
 #[derive(Resource)]
-pub(super) struct BlockAssets {
-    reveal_sound: Handle<AudioSource>,
-    revealed_1_mesh: Handle<Mesh>,
-    revealed_2_mesh: Handle<Mesh>,
-    revealed_3_mesh: Handle<Mesh>,
-    revealed_4_mesh: Handle<Mesh>,
-    revealed_5_mesh: Handle<Mesh>,
-    hidden_mat: Handle<StandardMaterial>,
-    marked_mat: Handle<StandardMaterial>,
-    revealed_1_mat: Handle<StandardMaterial>,
-    revealed_2_mat: Handle<StandardMaterial>,
-    revealed_3_mat: Handle<StandardMaterial>,
-    revealed_4_mat: Handle<StandardMaterial>,
-    revealed_5_mat: Handle<StandardMaterial>,
-    mine_mat: Handle<StandardMaterial>,
+pub(super) struct BlockMaterials {
+    hidden: Handle<StandardMaterial>,
+    marked: Handle<StandardMaterial>,
+    blue: Handle<StandardMaterial>,
+    green: Handle<StandardMaterial>,
+    red: Handle<StandardMaterial>,
+    orange: Handle<StandardMaterial>,
+    purple: Handle<StandardMaterial>,
+    mine: Handle<StandardMaterial>,
+}
+
+enum BlockDisplay {
+    Hidden,
+    Marked,
+    Revealed { adjacent_mines: u8 },
+    RevealedMine,
+    MarkedMine,
+    MissedMine,
+}
+impl BlockDisplay {
+    fn spawn(
+        &self,
+        game_assets: &Res<GameAssets>,
+        mat: &Res<BlockMaterials>,
+        block: Entity,
+        commands: &mut Commands,
+    ) {
+        let mut e = commands.get_or_spawn(block);
+        let sweeper_objects = game_assets.sweeper_objects.unwrap();
+        match self {
+            Self::Hidden => e.insert((sweeper_objects.block_merged.clone(), mat.hidden.clone())),
+            Self::Marked => e.insert(mat.marked.clone()),
+            Self::Revealed { adjacent_mines } => {
+                e.remove::<Handle<Mesh>>();
+                e.remove::<Handle<StandardMaterial>>();
+                let fives_place = adjacent_mines / 5;
+                let ones_place = adjacent_mines % 5;
+                if fives_place == 0 {
+                    if let Some((child_mesh, child_mat)) = match adjacent_mines {
+                        0 => None,
+                        1 => Some((sweeper_objects.single1.clone(), mat.blue.clone())),
+                        2 => Some((sweeper_objects.single2.clone(), mat.green.clone())),
+                        3 => Some((sweeper_objects.single3.clone(), mat.red.clone())),
+                        4 => Some((sweeper_objects.single4.clone(), mat.orange.clone())),
+                        _ => panic!("if fives_place is 0, adjacent should be 0..5"),
+                    } {
+                        let child = e
+                            .commands()
+                            .spawn(PbrBundle {
+                                mesh: child_mesh,
+                                material: child_mat,
+                                transform: Transform::from_scale(Vec3::splat(1.5)),
+                                ..default()
+                            })
+                            .id();
+                        e.add_child(child)
+                    } else {
+                        &mut e
+                    }
+                } else {
+                    if let Some((orbit_mesh, orbit_mat)) = match ones_place {
+                        0 => None,
+                        1 => Some((sweeper_objects.orbit1.clone(), mat.blue.clone())),
+                        2 => Some((sweeper_objects.orbit2.clone(), mat.green.clone())),
+                        3 => Some((sweeper_objects.orbit3.clone(), mat.red.clone())),
+                        4 => Some((sweeper_objects.orbit4.clone(), mat.orange.clone())),
+                        _ => panic!("ones_place must be be 0..5"),
+                    } {
+                        let orbit = e
+                            .commands()
+                            .spawn(PbrBundle {
+                                mesh: orbit_mesh,
+                                material: orbit_mat,
+                                ..default()
+                            })
+                            .id();
+                        e.add_child(orbit);
+                    }
+                    e.insert((sweeper_objects.ring.clone(), mat.purple.clone()));
+                    let (child_mesh, child_mat) = match fives_place {
+                        1 => (sweeper_objects.single1.clone(), mat.blue.clone()),
+                        2 => (sweeper_objects.single2.clone(), mat.green.clone()),
+                        3 => (sweeper_objects.single3.clone(), mat.red.clone()),
+                        4 => (sweeper_objects.single4.clone(), mat.orange.clone()),
+                        _ => panic!(
+                            "more than 24 adjacent mines is not supported (should not be possible)"
+                        ),
+                    };
+                    let child = e
+                        .commands()
+                        .spawn(PbrBundle {
+                            mesh: child_mesh,
+                            material: child_mat,
+                            transform: Transform::from_scale(Vec3::splat(3.0)),
+                            ..default()
+                        })
+                        .id();
+                    e.add_child(child)
+                }
+            }
+            Self::RevealedMine => e.insert((
+                game_assets.sweeper_objects.unwrap().mine_merged.clone(),
+                mat.mine.clone(),
+            )),
+            Self::MarkedMine => e.insert((
+                game_assets.sweeper_objects.unwrap().mine_merged.clone(),
+                mat.green.clone(),
+            )),
+            Self::MissedMine => e.insert((
+                game_assets.sweeper_objects.unwrap().mine_merged.clone(),
+                mat.red.clone(),
+            )),
+        };
+    }
 }
 
 fn calculate_position(index: [usize; 3], dim: [usize; 3]) -> Vec3 {
@@ -59,21 +200,14 @@ fn calculate_position(index: [usize; 3], dim: [usize; 3]) -> Vec3 {
     )
 }
 
-/// Initialize common meshes and materials that are re-used between games
-pub(super) fn initialize(
+/// Initialize materials that are re-used between games
+pub(super) fn create_materials(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    commands.insert_resource(BlockAssets {
-        reveal_sound: asset_server.load("pop2.ogg"),
-        revealed_1_mesh: meshes.add(Sphere::new(0.1).mesh().ico(4).unwrap()),
-        revealed_2_mesh: meshes.add(Sphere::new(0.15).mesh().ico(4).unwrap()),
-        revealed_3_mesh: meshes.add(Sphere::new(0.2).mesh().ico(4).unwrap()),
-        revealed_4_mesh: meshes.add(Sphere::new(0.25).mesh().ico(4).unwrap()),
-        revealed_5_mesh: meshes.add(Sphere::new(0.275).mesh().ico(4).unwrap()),
-        hidden_mat: materials.add(StandardMaterial {
+    commands.insert_resource(BlockMaterials {
+        hidden: materials.add(StandardMaterial {
             base_color_texture: Some(asset_server.load("concrete_02_albedo.png")),
             metallic_roughness_texture: Some(asset_server.load("concrete_02_orm.png")),
             perceptual_roughness: 1.0,
@@ -81,34 +215,13 @@ pub(super) fn initialize(
             normal_map_texture: Some(asset_server.load("concrete_02_normal.png")),
             ..default()
         }),
-        marked_mat: materials.add(StandardMaterial {
-            base_color: Color::RED,
-            ..default()
-        }),
-        revealed_1_mat: materials.add(StandardMaterial {
-            base_color: Color::BLUE,
-            ..default()
-        }),
-        revealed_2_mat: materials.add(StandardMaterial {
-            base_color: Color::GREEN,
-            ..default()
-        }),
-        revealed_3_mat: materials.add(StandardMaterial {
-            base_color: Color::RED,
-            ..default()
-        }),
-        revealed_4_mat: materials.add(StandardMaterial {
-            base_color: Color::ORANGE,
-            ..default()
-        }),
-        revealed_5_mat: materials.add(StandardMaterial {
-            base_color: Color::PURPLE,
-            ..default()
-        }),
-        mine_mat: materials.add(StandardMaterial {
-            base_color: Color::DARK_GRAY,
-            ..default()
-        }),
+        marked: materials.add(Color::RED),
+        blue: materials.add(Color::BLUE),
+        green: materials.add(Color::GREEN),
+        red: materials.add(Color::RED),
+        orange: materials.add(Color::ORANGE),
+        purple: materials.add(Color::PURPLE),
+        mine: materials.add(Color::DARK_GRAY),
     })
 }
 
@@ -116,26 +229,26 @@ pub(super) fn initialize(
 pub(super) fn setup(
     settings: Res<Settings>,
     mut commands: Commands,
-    block_assets: Res<BlockAssets>,
+    block_mat: Res<BlockMaterials>,
     game_assets: Res<GameAssets>,
+    mut field_events: EventWriter<FieldEvent>,
 ) {
-    let cube = Cuboid::new(1.0, 1.0, 1.0);
-
     let mut add_cube = |index, pos| {
         let transform = Transform::from_translation(pos);
-        let bb = cube.aabb_3d(transform.translation, transform.rotation);
-        commands
+        let bb = Cuboid::new(1.0, 1.0, 1.0).aabb_3d(transform.translation, transform.rotation);
+        let block = commands
             .spawn((
                 PbrBundle {
-                    mesh: game_assets.sweeper_objects.resource().block_merged.clone(),
-                    material: block_assets.hidden_mat.clone(),
                     transform,
                     ..default()
                 },
                 Block::new(bb, index),
-                GameComponent,
+                GamePiece,
             ))
-            .id()
+            .id();
+        BlockDisplay::Hidden.spawn(&game_assets, &block_mat, block, &mut commands);
+        debug!("Send FieldEvent::SpawnBlock");
+        field_events.send(FieldEvent::SpawnBlock(block, index));
     };
 
     let field_size = settings.field_size;
@@ -149,22 +262,6 @@ pub(super) fn setup(
     }
 }
 
-#[derive(Debug, Event)]
-pub enum BlockEvent {
-    /// Uncover a block, detonating any contained mines.
-    /// Received from the Minefield enitity after checking its contents.
-    Clear(Entity, Contains),
-    /// Mark a block (or unmark if already marked) as containing a mine.
-    Mark(Entity),
-}
-impl BlockEvent {
-    pub fn block_id(&self) -> Entity {
-        match self {
-            Self::Clear(e, _) | Self::Mark(e) => *e,
-        }
-    }
-}
-
 pub(super) fn handle_ray_events(
     mut ray_events: EventReader<RayEvent>,
     blocks: Query<(Entity, &Block)>,
@@ -174,10 +271,10 @@ pub(super) fn handle_ray_events(
     for ray_event in ray_events.read() {
         match ray_event {
             RayEvent::ClearBlock(ray) => {
-                if let Some((block, entity, index)) = raycast_blocks(*ray, &blocks) {
+                if let Some((block, _entity, index)) = raycast_blocks(*ray, &blocks) {
                     if !block.marked {
                         debug!("Send FieldEvent::ClearBlock");
-                        field_events.send(FieldEvent::ClearBlock(entity, index));
+                        field_events.send(FieldEvent::ClearBlock(index));
                     }
                 }
             }
@@ -222,7 +319,7 @@ pub(super) fn handle_block_events(
     mut commands: Commands,
     mut block_events: EventReader<BlockEvent>,
     mut blocks: Query<&mut Block>,
-    block_assets: Res<BlockAssets>,
+    block_mat: Res<BlockMaterials>,
     game_assets: Res<GameAssets>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
@@ -241,80 +338,69 @@ pub(super) fn handle_block_events(
                 debug!("Revealed block {entity:?}");
                 block.revealed = Some(*contains);
                 any_blocks_cleared = true;
-                commands
-                    .entity(*entity)
-                    .remove::<Handle<Mesh>>()
-                    .remove::<Handle<StandardMaterial>>();
-                match contains {
+                match *contains {
                     Contains::Mine => {
-                        commands
-                            .entity(*entity)
-                            .insert(game_assets.sweeper_objects.resource().mine_merged.clone())
-                            .insert(block_assets.mine_mat.clone());
+                        BlockDisplay::RevealedMine.spawn(
+                            &game_assets,
+                            &block_mat,
+                            *entity,
+                            &mut commands,
+                        );
                         next_state.set(GameState::GameOver);
                     }
-                    Contains::Empty { adjacent_mines } => match adjacent_mines {
-                        0 => {}
-                        1 => {
-                            commands
-                                .entity(*entity)
-                                .insert(block_assets.revealed_1_mesh.clone())
-                                .insert(block_assets.revealed_1_mat.clone());
-                        }
-                        2 => {
-                            commands
-                                .entity(*entity)
-                                .insert(block_assets.revealed_2_mesh.clone())
-                                .insert(block_assets.revealed_2_mat.clone());
-                        }
-                        3 => {
-                            commands
-                                .entity(*entity)
-                                .insert(block_assets.revealed_3_mesh.clone())
-                                .insert(block_assets.revealed_3_mat.clone());
-                        }
-                        4 => {
-                            commands
-                                .entity(*entity)
-                                .insert(block_assets.revealed_4_mesh.clone())
-                                .insert(block_assets.revealed_4_mat.clone());
-                        }
-                        _ => {
-                            commands
-                                .entity(*entity)
-                                .insert(block_assets.revealed_5_mesh.clone())
-                                .insert(block_assets.revealed_5_mat.clone());
-                        }
-                    },
+                    Contains::Empty { adjacent_mines } => BlockDisplay::Revealed { adjacent_mines }
+                        .spawn(&game_assets, &block_mat, *entity, &mut commands),
                 }
             }
-            BlockEvent::Mark(entity) => {
-                debug!("Mark block {entity:?}");
-                commands
-                    .entity(*entity)
-                    .remove::<Handle<StandardMaterial>>();
-                match block.marked {
-                    true => {
-                        debug!("Unmark block {entity:?} as mine");
-                        block.marked = false;
-                        commands
-                            .entity(*entity)
-                            .insert(block_assets.hidden_mat.clone());
+            BlockEvent::EndReveal(entity, contains) => {
+                debug!("Revealed block {entity:?} at end of game");
+                match *contains {
+                    Contains::Mine if block.revealed.is_some() => {
+                        BlockDisplay::MissedMine.spawn(
+                            &game_assets,
+                            &block_mat,
+                            *entity,
+                            &mut commands,
+                        );
                     }
-                    false => {
-                        debug!("Mark block {entity:?} as mine");
-                        block.marked = true;
-                        commands
-                            .entity(*entity)
-                            .insert(block_assets.marked_mat.clone());
+                    Contains::Mine if block.marked => {
+                        BlockDisplay::MarkedMine.spawn(
+                            &game_assets,
+                            &block_mat,
+                            *entity,
+                            &mut commands,
+                        );
                     }
+                    Contains::Mine => {
+                        BlockDisplay::RevealedMine.spawn(
+                            &game_assets,
+                            &block_mat,
+                            *entity,
+                            &mut commands,
+                        );
+                    }
+                    Contains::Empty { adjacent_mines } => BlockDisplay::Revealed { adjacent_mines }
+                        .spawn(&game_assets, &block_mat, *entity, &mut commands),
                 }
+                block.revealed = Some(*contains);
             }
+            BlockEvent::Mark(entity) => match block.marked {
+                true => {
+                    debug!("Unmark block {entity:?}");
+                    block.marked = false;
+                    BlockDisplay::Hidden.spawn(&game_assets, &block_mat, *entity, &mut commands);
+                }
+                false => {
+                    debug!("Mark block {entity:?}");
+                    block.marked = true;
+                    BlockDisplay::Marked.spawn(&game_assets, &block_mat, *entity, &mut commands);
+                }
+            },
         }
     }
     if any_blocks_cleared {
         commands.spawn(AudioBundle {
-            source: block_assets.reveal_sound.clone(),
+            source: game_assets.pop2.clone(),
             settings: PlaybackSettings {
                 mode: PlaybackMode::Despawn,
                 ..default()

@@ -4,13 +4,30 @@ use rand::prelude::*;
 
 use super::{
     block::{Block, BlockEvent},
-    GameComponent, GameState,
+    GamePiece, GameState,
 };
 use crate::Settings;
 
+pub struct FieldPlugin;
+impl Plugin for FieldPlugin {
+    fn build(&self, app: &mut App) {
+        // Add Minefield systems
+        app.add_systems(OnEnter(GameState::GameStart), spawn.after(super::cleanup));
+        app.add_systems(
+            Update,
+            handle_field_events
+                .after(super::block::handle_ray_events)
+                .run_if(GameState::playable()),
+        );
+        app.add_systems(OnEnter(GameState::GameOver), reveal_all);
+        app.add_event::<FieldEvent>();
+    }
+}
+
 #[derive(Event)]
 pub enum FieldEvent {
-    ClearBlock(Entity, [usize; 3]),
+    SpawnBlock(Entity, [usize; 3]),
+    ClearBlock([usize; 3]),
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -156,12 +173,12 @@ impl Minefield {
     }
 }
 
-pub(super) fn spawn(settings: Res<Settings>, mut commands: Commands) {
+fn spawn(settings: Res<Settings>, mut commands: Commands) {
     let field = Minefield {
         cells: Array3::default(settings.field_size),
         density: settings.mine_density.into(),
     };
-    commands.spawn((field, GameComponent));
+    commands.spawn((field, GamePiece));
 }
 
 pub(super) fn handle_field_events(
@@ -174,7 +191,14 @@ pub(super) fn handle_field_events(
 ) {
     for event in field_events.read() {
         match event {
-            FieldEvent::ClearBlock(entity, index) => {
+            FieldEvent::SpawnBlock(entity, index) => {
+                let mut field = field.single_mut();
+                let Some(cell) = field.cells.get_mut(*index) else {
+                    continue;
+                };
+                cell.block = Some(*entity);
+            }
+            FieldEvent::ClearBlock(index) => {
                 let mut field = field.single_mut();
                 let Some(cell) = field.cells.get_mut(*index) else {
                     continue;
@@ -190,7 +214,7 @@ pub(super) fn handle_field_events(
                     continue;
                 };
                 let contains = cell.contains;
-                let event = BlockEvent::Clear(*entity, contains);
+                let event = BlockEvent::Clear(cell.block.unwrap(), contains);
                 debug!("Send {event:?}");
                 block_events.send(event);
                 if matches!(contains, Contains::Empty { adjacent_mines } if adjacent_mines == 0) {
@@ -203,5 +227,12 @@ pub(super) fn handle_field_events(
                 }
             }
         }
+    }
+}
+
+fn reveal_all(mut field: Query<&mut Minefield>, mut block_events: EventWriter<BlockEvent>) {
+    for cell in field.single_mut().cells.iter_mut() {
+        cell.revealed = true;
+        block_events.send(BlockEvent::EndReveal(cell.block.unwrap(), cell.contains));
     }
 }

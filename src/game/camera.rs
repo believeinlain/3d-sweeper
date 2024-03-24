@@ -2,9 +2,22 @@ use std::f32::consts::{PI, TAU};
 
 use bevy::prelude::*;
 
-use crate::{input::ScreenPosition, InputEvent};
+use crate::{input::ScreenPosition, GameState, InputEvent};
 
-use super::GameComponent;
+use super::GamePiece;
+
+pub struct CameraPlugin;
+impl Plugin for CameraPlugin {
+    fn build(&self, app: &mut App) {
+        // Add Camera systems
+        app.add_systems(OnEnter(GameState::GameStart), spawn.after(super::cleanup));
+        app.add_systems(Update, camera_controls.run_if(GameState::in_game()));
+        app.add_event::<RayEvent>();
+        app.insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)));
+        #[cfg(feature = "debug-draw")]
+        app.add_systems(Update, cursor_ray_gizmo.run_if(GameState::playable()));
+    }
+}
 
 #[derive(Component)]
 pub struct MainCamera {
@@ -38,7 +51,7 @@ pub(super) fn spawn(mut commands: Commands) {
             ..Default::default()
         },
         MainCamera::default(),
-        GameComponent,
+        GamePiece,
     ));
 }
 
@@ -55,7 +68,7 @@ pub(super) fn camera_controls(
                 let delta_y = delta.y * PI;
                 // Rotate around local X axis and global Y axis
                 let camera_tilt = transform.up().dot(Vec3::Y);
-                debug!("Camera tilt: {camera_tilt}");
+                info!("Camera tilt: {camera_tilt}");
                 let x_rot = Quat::from_axis_angle(
                     Vec3::Y,
                     if camera_tilt > 0.0 { -delta_x } else { delta_x },
@@ -63,6 +76,14 @@ pub(super) fn camera_controls(
                 let y_rot = Quat::from_axis_angle(*transform.local_x(), -delta_y);
                 transform.rotate_around(Vec3::ZERO, x_rot);
                 transform.rotate_around(Vec3::ZERO, y_rot);
+                // Fix the odd tilt we get sometimes
+                let camera_tilt = transform.up().dot(Vec3::Y);
+                if camera_tilt > 0.01 {
+                    *transform = transform.looking_at(Vec3::ZERO, Vec3::Y);
+                }
+                if camera_tilt < -0.01 {
+                    *transform = transform.looking_at(Vec3::ZERO, Vec3::NEG_Y);
+                }
             }
             InputEvent::ZoomCamera { delta } => {
                 let zoom = *delta * transform.translation * main_camera.zoom_speed * -0.1;
