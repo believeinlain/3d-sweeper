@@ -34,7 +34,7 @@ fn update(mut contexts: EguiContexts, mut window: Query<&mut Window>) {
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add(egui::Image::new(egui::include_image!(
-                    "../embed/machineinterface_02.svg"
+                    "../embed/splash.svg"
                 )));
             });
         });
