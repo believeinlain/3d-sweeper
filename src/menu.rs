@@ -1,8 +1,5 @@
 use bevy::{app::AppExit, prelude::*};
-use bevy_egui::{
-    egui::{self, epaint::Shadow, Align2},
-    EguiContexts, EguiPlugin,
-};
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
 use crate::{game::GameResult, FieldSettings, GameSettings, GameState, Safety};
 
@@ -38,12 +35,12 @@ fn global_settings(ctx: &mut egui::Context) {
         style.spacing.item_spacing = egui::Vec2::new(5.0, 5.0);
     });
     let mut visuals = egui::Visuals::dark();
-    visuals.window_shadow = Shadow::NONE;
+    visuals.window_shadow = egui::epaint::Shadow::NONE;
 }
 
 fn create_menu_window<'a>(title: impl Into<egui::WidgetText>) -> egui::Window<'a> {
     egui::Window::new(title)
-        .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .collapsible(false)
         .movable(false)
         .resizable(false)
@@ -180,7 +177,7 @@ fn display_game_over(
         GameResult::Failure => "Game Over",
         GameResult::Victory => "Victory!",
     })
-    .anchor(Align2::CENTER_BOTTOM, [0.0, 0.0])
+    .anchor(egui::Align2::CENTER_BOTTOM, [0.0, 0.0])
     .collapsible(false)
     .movable(false)
     .resizable(false)

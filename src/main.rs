@@ -24,9 +24,7 @@ fn main() {
                 .set(LogPlugin {
                     level: bevy::log::Level::INFO,
                     ..default()
-                })
-                // Texture settings
-                .set(ImagePlugin::default_nearest()),
+                }),
         )
         .add_systems(Startup, setup)
         .add_plugins((
